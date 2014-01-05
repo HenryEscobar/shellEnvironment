@@ -5,9 +5,11 @@ My general shell environment.
 
 Files included:
 ---------------
-* .bashrc
-* .ssh/config # change title when ssh to other hosts in tmux. github still works
-* .tmux.conf
-* INSTALL.sh  # make backups, and create hardlinks in ~/
 
+| Filename      | Description      | Comments     |
+| ------------- |:----------------:| ------------:|
+| ~/.bashrc     | bash config file | Nothing Special. source ~/.bashrc-local |
+| .tmux.conf    | tmux config | use cntl-a. some other minor custimizations |
+| .ssh/config | set tumux title as I ssh | titles to match hosts |
+| INSTALL.sh  | install these files | make backups, and create hardlinks in ~/ |
 

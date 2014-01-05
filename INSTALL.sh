@@ -14,12 +14,13 @@ sshSubDir="config"
 
 backupTag=`date +%Y%m%d-%H%M%S`
 
+echo "IN DEBUG MODE! Will not put into home directory"
 
 for i in $homeFileist ; do
     if [ -f ~/$i ] ; then
        echo "cp ~/$i ~/$i-$backupTag"
     fi
-    echo "cp $i ~/"
+    echo "ln $i ~/"
 done
 
 for i in $sshSubDir ; do
@@ -32,5 +33,5 @@ for i in $sshSubDir ; do
        echo "cp ~/.ssh/$i ~/.ssh/$i-$backupTag"
     fi
 
-    echo "cp $i ~/.ssh/"
+    echo "ln $i ~/.ssh/"
 done
