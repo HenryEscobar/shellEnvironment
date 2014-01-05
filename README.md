@@ -1,4 +1,10 @@
 shellEnvironment
 ================
 
-My general shell environment I prefer
+My general shell environment.
+
+Files included:
+---------------
+* .bashrc
+* .ssh/config
+
