@@ -14,4 +14,4 @@ Files included:
 | .ssh/config | set tumux title as I ssh | titles to match hosts |
 | .screenrc | screen configuration | left for legacy reasons |
 | .tmux.conf    | tmux config | use cntl-a. some other minor custimizations |
-| .tmux.reset    | tmux default config | used when you make changes since tmux not best when you make changes to reflect them. |
+| .tmux.reset    | tmux default config | default tmux. used to reset conf at reload |

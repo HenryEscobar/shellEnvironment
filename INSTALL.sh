@@ -9,7 +9,7 @@
 #
 # Bugs: 
 
-homeFileList=".bashrc .tmux.conf"
+homeFileList=".bashrc .tmux.conf .screenrc .tmux.reset"
 sshSubDir="config"
 
 backupTag=`date +%Y%m%d-%H%M%S`
@@ -35,3 +35,4 @@ for i in $sshSubDir ; do
 
     echo "ln $i ~/.ssh/"
 done
+
