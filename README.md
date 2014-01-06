@@ -8,8 +8,10 @@ Files included:
 
 | Filename      | Description      | Comments     |
 | ------------- |:----------------:| ------------:|
-| ~/.bashrc     | bash config file | Nothing Special. source ~/.bashrc-local |
-| .tmux.conf    | tmux config | use cntl-a. some other minor custimizations |
-| .ssh/config | set tumux title as I ssh | titles to match hosts |
 | INSTALL.sh  | install these files | make backups, and create hardlinks in ~/ |
-
+| README.md | What your are reading | |
+| ~/.bashrc     | bash config file | Nothing Special. source ~/.bashrc-local |
+| .ssh/config | set tumux title as I ssh | titles to match hosts |
+| .screenrc | screen configuration | left for legacy reasons |
+| .tmux.conf    | tmux config | use cntl-a. some other minor custimizations |
+| .tmux.reset    | tmux default config | used when you make changes since tmux not best when you make changes to reflect them. |
