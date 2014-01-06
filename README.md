@@ -7,7 +7,7 @@ Files included:
 ---------------
 
 | Filename      | Description      | Comments     |
-| ------------- |:----------------:| ------------:|
+| ------------- |----------------| ------------|
 | INSTALL.sh  | install these files | make backups, and create hardlinks in ~/ |
 | README.md | What your are reading | |
 | ~/.bashrc     | bash config file | Nothing Special. source ~/.bashrc-local |
