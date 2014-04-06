@@ -25,6 +25,7 @@ fi
 for i in $homeFileList ; do
     if [ -f ~/$i ] ; then
        echo "mv ~/$i ~/$i-$backupTag"
+       [ $DEBUG -eq 0 ] && mv ~/$i ~/$i-$backupTag 
     fi
     echo "ln $i ~/"
     [ $DEBUG -eq 0 ] && ln $i ~/
