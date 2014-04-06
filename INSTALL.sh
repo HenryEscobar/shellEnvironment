@@ -16,9 +16,9 @@ backupTag=`date +%Y%m%d-%H%M%S`
 
 echo "IN DEBUG MODE! Will not put into home directory"
 
-for i in $homeFileist ; do
+for i in $homeFileList ; do
     if [ -f ~/$i ] ; then
-       echo "cp ~/$i ~/$i-$backupTag"
+       echo "mv ~/$i ~/$i-$backupTag"
     fi
     echo "ln $i ~/"
 done
@@ -30,7 +30,7 @@ for i in $sshSubDir ; do
     fi 
 
     if [ -f ~/.ssh/$i ] ; then
-       echo "cp ~/.ssh/$i ~/.ssh/$i-$backupTag"
+       echo "mv ~/.ssh/$i ~/.ssh/$i-$backupTag"
     fi
 
     echo "ln ./.ssh/$i ~/.ssh/"
