@@ -33,6 +33,7 @@ for i in $sshSubDir ; do
        echo "cp ~/.ssh/$i ~/.ssh/$i-$backupTag"
     fi
 
-    echo "ln $i ~/.ssh/"
+    echo "ln ./.ssh/$i ~/.ssh/"
+
 done
 
