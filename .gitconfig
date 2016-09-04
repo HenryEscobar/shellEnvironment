@@ -1,0 +1,13 @@
+[user]
+	email = henry.escobar@gmail.com
+	name = Henry Escobar
+[core]
+        editor = vim
+[alias]
+        st = status
+        co = checkout
+        br = branch
+        up = rebase
+        ci = commit
+[push]
+        default = matching
