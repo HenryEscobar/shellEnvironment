@@ -73,41 +73,13 @@ set-window-option -g mode-keys vi
 setw -g xterm-keys on
 
 # Bindings for vertical + horizontal splits
-#unbind %
-#bind | split-window -h
-#bind - split-window -v
-#bind C-k resize-pane -U 5
-#bind C-j resize-pane -D 5
-#bind C-h resize-pane -L 5
-#bind C-l resize-pane -R 5
-
-### Clone of Eric's magic pane setup:
-unbind-key %
-unbind-key C-Left
-unbind-key C-Right
-unbind-key C-s-Left
-unbind-key C-s-Right
-
-bind-key -r - split-window -v
-bind-key -r | split-window -h
-bind-key -r Left select-pane -t :.-
-bind-key -r Right select-pane -t :.+
-
-bind-key -r C-n new-window
-bind-key -r C-a-Left swap-window -t:-1  #-n
-bind-key -r C-a-Right swap-window -t:+1 #-n
-
-unbind-key l
-unbind-key k
-unbind-key j
-unbind-key i
-
-bind-key -r k resize-pane -D
-bind-key -r j resize-pane -L
-bind-key -r i resize-pane -U
-bind-key -r l resize-pane -R
-
-
+unbind %
+bind | split-window -h
+bind - split-window -v
+bind C-k resize-pane -U 5
+bind C-j resize-pane -D 5
+bind C-h resize-pane -L 5
+bind C-l resize-pane -R 5
 
 # Base for numbering is 1, not 0
 #set -g base-index 1 <- why?
