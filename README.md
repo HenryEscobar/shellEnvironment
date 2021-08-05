@@ -4,8 +4,8 @@ shellEnvironment
 My general shell environment.
 
 apt-get update
-apt-get install curl -y
-
+apt-get install git -y
+git clone https://github.com/HenryEscobar/shellEnvironment.git
 
 
 Files included:
