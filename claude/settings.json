@@ -1,0 +1,139 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm:*)",
+      "Bash(npm run:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git stash:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git worktree:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh run:*)",
+      "Bash(gh api:*)",
+      "Bash(ls:*)",
+      "Bash(which:*)",
+      "Bash(node:*)",
+      "Bash(npx:*)",
+      "Bash(gws auth status:*)",
+      "Bash(gws auth login:*)",
+      "Bash(gws schema:*)",
+      "Bash(gws drive files list:*)",
+      "Bash(gws drive files get:*)",
+      "Bash(gws docs documents get:*)",
+      "Bash(gws docs --help:*)",
+      "Bash(gws sheets +read:*)",
+      "Bash(gws sheets spreadsheets values get:*)",
+      "Bash(gws sheets spreadsheets get:*)"
+    ],
+    "deny": [
+      "Bash(gws gmail:*)",
+      "Bash(gws script:*)",
+      "Bash(gws drive files delete:*)",
+      "Bash(gws drive files emptyTrash:*)",
+      "Bash(gws auth export:*)",
+      "Bash(gws auth logout:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(rm -rf:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(./secrets/**)",
+      "Read(./**/credentials*)",
+      "Write(**/.env)",
+      "Write(**/.env.*)",
+      "Edit(**/.env)",
+      "Edit(**/.env.*)",
+      "Write(./secrets/**)",
+      "Edit(./secrets/**)",
+      "Write(./**/credentials*)",
+      "Edit(./**/credentials*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.npmrc)",
+      "Edit(~/.bashrc)",
+      "Edit(~/.zshrc)",
+      "Edit(~/.bash_profile)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'CMD=$(jq -r \".tool_input.command\" <<< \"$(cat)\"); for p in \"rm -rf /\" \"rm -rf ~\" \"DROP TABLE\" \"DROP DATABASE\" \"TRUNCATE\" \"push.*--force\" \"push.*-f \" \"reset --hard\"; do if echo \"$CMD\" | grep -qiE \"$p\"; then echo \"Blocked: destructive pattern \\\"$p\\\" detected\" >&2; exit 2; fi; done; exit 0'"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(jq -r \".tool_input.file_path\" <<< \"$(cat)\"); for p in \".env\" \".git/\" \"id_rsa\" \"id_ed25519\" \".pem\"; do if [[ \"$FILE\" == *\"$p\"* ]]; then echo \"Blocked: $FILE matches protected pattern $p\" >&2; exit 2; fi; done; exit 0'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'CMD=$(jq -r \".tool_input.command\" <<< \"$(cat)\"); if echo \"$CMD\" | grep -qiE \"gws[[:space:]]+(gmail|script)([[:space:]]|$)|gws[[:space:]]+drive[[:space:]]+files[[:space:]]+(delete|emptyTrash)|gws[[:space:]]+auth[[:space:]]+(export|logout)\"; then echo \"Blocked: high-risk gws command (gmail/script, drive delete or emptyTrash, auth export/logout) is not permitted for the agent\" >&2; exit 2; fi; exit 0'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(jq -r \".tool_input.file_path // empty\" <<< \"$(cat)\"); [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE \"\\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|css|scss|less|html|md|mdx|ya?ml|graphql)$\" && npx --no-install prettier --write \"$FILE\" >/dev/null 2>&1; true'"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "osascript -e 'display notification \"Claude Code needs your attention\" with title \"Claude Code\"'"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true
+  },
+  "skipWorkflowUsageWarning": true,
+  "theme": "dark",
+  "showTurnDuration": true,
+  "model": "claude-opus-4-8"
+}

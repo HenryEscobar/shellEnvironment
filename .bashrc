@@ -1,16 +1,14 @@
+# ~/.bashrc — interactive bash config.
+# Shared aliases/functions live in ~/.shell_common (sourced by both shells).
+# Machine-specific or secret bits live in ~/.bashrc-local (gitignored).
 
-#echo "bashrc"
+[ -f "$HOME/.shell_common" ] && . "$HOME/.shell_common"
 
-alias more=less
-alias mroe=less
+# History
+HISTSIZE=100000
+HISTFILESIZE=100000
+HISTCONTROL=ignoredups:ignorespace
+shopt -s histappend 2>/dev/null
 
-# set terminal title and abuse order of precendence (&& before ||)
-function title(){
-   [ $# -eq 1 ] && t=$1 || t=`hostname -s `
-   printf "\033k$t\033\\"
-}
-
-if [ -f ~/.bashrc-local ] ; then
-   .  ~/.bashrc-local 
-fi
-
+# Machine-local overrides (LAST so they win).
+[ -f "$HOME/.bashrc-local" ] && . "$HOME/.bashrc-local"

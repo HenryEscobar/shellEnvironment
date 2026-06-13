@@ -1,0 +1,42 @@
+# Shared shell config — sourced from both .bashrc and .zshrc.
+# Keep portable: POSIX-ish, no bash-only or zsh-only syntax.
+
+# --- Aliases -----------------------------------------------------------------
+alias more=less
+alias mroe=less   # typo-fix
+alias ll='ls -lah'
+alias la='ls -A'
+
+# Prefer modern replacements when installed, fall back silently.
+command -v eza  >/dev/null 2>&1 && alias ls='eza'
+command -v bat  >/dev/null 2>&1 && alias cat='bat --paged=never'
+command -v fd   >/dev/null 2>&1 && alias find='fd'
+
+# --- Functions ---------------------------------------------------------------
+
+# Set the terminal/screen/tmux title. Works in bash and zsh.
+# Usage: title          -> short hostname
+#        title my-task  -> custom string
+title() {
+    local t
+    if [ $# -eq 1 ]; then
+        t="$1"
+    else
+        t="$(hostname -s)"
+    fi
+    case "$TERM" in
+        screen*|tmux*) printf '\033k%s\033\\' "$t" ;;
+        xterm*|rxvt*)  printf '\033]0;%s\007' "$t" ;;
+    esac
+}
+
+# --- PATH --------------------------------------------------------------------
+# Homebrew on Apple Silicon. Harmless on Intel Macs / Linux (path won't exist).
+if [ -x /opt/homebrew/bin/brew ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+# User-local bins.
+[ -d "$HOME/.local/bin" ] && PATH="$HOME/.local/bin:$PATH"
+[ -d "$HOME/bin" ] && PATH="$HOME/bin:$PATH"
+export PATH

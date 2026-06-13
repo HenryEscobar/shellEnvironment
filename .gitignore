@@ -1,0 +1,55 @@
+# macOS
+.DS_Store
+._*
+
+# Editor / scratch
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Machine-local overrides — every shared dotfile sources its *-local twin
+# (e.g. ~/.zshrc -> ~/.zshrc-local). Never commit those.
+*-local
+*.local
+
+# Secrets & keys
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+id_ecdsa*
+known_hosts
+authorized_keys
+.env
+.env.*
+!.env.example
+
+# Backups created by INSTALL.sh
+*-[0-9]*-[0-9]*
+
+# Project-scope Claude state (created by Claude Code in cwd).
+# The TRACKED claude/ dir lives without the leading dot.
+/.claude/
+
+# Claude runtime state — only configs (rules/, agents/, commands/, skills/,
+# CLAUDE.md, statusline.sh) should be tracked under claude/.
+claude/sessions/
+claude/projects/
+claude/cache/
+claude/telemetry/
+claude/backups/
+claude/file-history/
+claude/shell-snapshots/
+claude/paste-cache/
+claude/debug/
+claude/plans/
+claude/agent-memory/
+claude/session-env/
+claude/downloads/
+claude/history.jsonl
+claude/*.jsonl
+claude/*-cache.json
+claude/.last-*
+claude/mcp-needs-auth-cache.json

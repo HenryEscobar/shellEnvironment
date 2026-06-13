@@ -1,0 +1,48 @@
+# Brewfile — installed via `brew bundle --file=host-os/Brewfile`.
+# Lean defaults; uncomment what you actually want on a given machine.
+# Keep this in sync with what you reach for daily — drift makes it noise.
+
+# --- Core CLI ----------------------------------------------------------------
+brew "git"
+brew "git-lfs"
+brew "gh"                  # GitHub CLI
+brew "tmux"
+brew "vim"
+brew "neovim"
+brew "jq"
+brew "wget"
+brew "tree"
+brew "htop"
+brew "watch"
+brew "coreutils"           # gdate, gsed, gls — call as g<name>
+brew "shellcheck"
+
+# --- Modern unix replacements ------------------------------------------------
+brew "ripgrep"             # rg
+brew "fd"                  # find
+brew "bat"                 # cat
+brew "eza"                 # ls
+brew "fzf"                 # fuzzy finder
+brew "zoxide"              # smarter cd
+brew "direnv"              # per-dir env
+
+# --- Languages (uncomment what you need) ------------------------------------
+brew "node"                # needed by host-os/npm-globals.sh and `npx`-based MCPs
+# brew "go"
+# brew "python@3.12"
+# brew "openjdk@21"
+# brew "rustup"
+
+# --- Cloud / infra (uncomment what you need) --------------------------------
+# brew "awscli"
+# brew "terraform"
+# brew "kubectl"
+
+# --- Casks (GUI apps) — keep minimal; add by hand as you adopt them ---------
+# cask "iterm2"
+# cask "visual-studio-code"
+# cask "google-chrome"
+# cask "rectangle"
+# cask "raycast"
+# cask "1password"
+# cask "docker"
