@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# gh-newrepo — create a GitHub repo pre-configured to my standard:
+#   * squash-only merges (merge-commit and rebase disabled)
+#   * auto-delete head branch on merge
+#   * branch protection on the default branch:
+#       PR required (0 approvals), linear history, no force-push, no deletion
+#
+# Defaults to --private. Seeds an empty initial commit on `main` so the
+# branch exists and protection can be applied immediately.
+#
+# Usage:
+#   gh-newrepo <name> [gh repo create flags...]
+#
+# Examples:
+#   gh-newrepo my-tool
+#   gh-newrepo my-tool --public --description "A thing"
+#
+# Requires: gh (authenticated). Honors init.defaultBranch=main.
+
+set -euo pipefail
+
+die() { printf 'gh-newrepo: %s\n' "$*" >&2; exit 1; }
+
+[ $# -ge 1 ] || die "usage: gh-newrepo <name> [gh repo create flags...]"
+command -v gh >/dev/null 2>&1 || die "gh CLI not found on PATH"
+gh auth status >/dev/null 2>&1 || die "gh not authenticated — run: gh auth login"
+
+name="$1"; shift
+
+# Default to --private unless the caller specified a visibility flag.
+vis=(--private)
+for arg in "$@"; do
+    case "$arg" in
+        --private|--public|--internal) vis=() ;;
+    esac
+done
+
+owner="$(gh api user -q .login)"
+
+echo "Creating $owner/$name ..."
+gh repo create "$name" "${vis[@]}" "$@" --clone
+
+# Ensure the default branch exists (a fresh empty repo has no commits/branch).
+default_branch="$(gh repo view "$owner/$name" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || true)"
+if [ -z "$default_branch" ] && [ -d "$name/.git" ]; then
+    echo "Seeding initial commit on main ..."
+    ( cd "$name"
+      git commit --allow-empty -m "Initial commit" >/dev/null
+      git branch -M main
+      git push -u origin main >/dev/null )
+    default_branch="main"
+fi
+[ -n "$default_branch" ] || die "could not determine default branch for $owner/$name"
+
+echo "Applying merge settings (squash-only, delete branch on merge) ..."
+gh repo edit "$owner/$name" \
+    --enable-squash-merge \
+    --enable-merge-commit=false \
+    --enable-rebase-merge=false \
+    --delete-branch-on-merge
+
+echo "Applying branch protection on $default_branch ..."
+gh api -X PUT "repos/$owner/$name/branches/$default_branch/protection" --input - <<JSON >/dev/null
+{
+  "required_status_checks": null,
+  "enforce_admins": false,
+  "required_pull_request_reviews": { "required_approving_review_count": 0 },
+  "restrictions": null,
+  "required_linear_history": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+JSON
+
+echo "Done: $owner/$name (squash-only, PR-required, linear history)."

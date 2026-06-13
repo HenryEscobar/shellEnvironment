@@ -108,6 +108,17 @@ if [ ! -d "$HOME/.ssh" ]; then
 fi
 copy_one "$REPO_DIR/.ssh/config" "$HOME/.ssh/config"
 
+# --- 2b. Convenience scripts (bin/ -> ~/bin) --------------------------------
+# Executable helpers. ~/bin is put on PATH by .shell_common. cp -p in copy_one
+# preserves the executable bit committed in the repo.
+if [ -d "$REPO_DIR/bin" ]; then
+    log "Copying bin/* into ~/bin..."
+    run "mkdir -p '$HOME/bin'"
+    while IFS= read -r -d '' src; do
+        copy_one "$src" "$HOME/bin/$(basename "$src")"
+    done < <(find "$REPO_DIR/bin" -type f -print0)
+fi
+
 # --- 3. Claude config (optional) --------------------------------------------
 if [ "$DO_CLAUDE" -eq 1 ]; then
     log "Copying claude/* into ~/.claude/..."

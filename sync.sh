@@ -147,6 +147,13 @@ if [ "$DO_FILES" -eq 1 ]; then
         handle_one "$HOME/.ssh/config" "$REPO_DIR/.ssh/config"
     fi
 
+    if [ -d "$REPO_DIR/bin" ]; then
+        log "scanning bin/..."
+        while IFS= read -r -d '' src; do
+            handle_one "$HOME/bin/$(basename "$src")" "$src"
+        done < <(find "$REPO_DIR/bin" -type f -print0)
+    fi
+
     if [ "$DO_CLAUDE" -eq 1 ] && [ -d "$REPO_DIR/claude" ]; then
         log "scanning claude/..."
         while IFS= read -r -d '' src; do

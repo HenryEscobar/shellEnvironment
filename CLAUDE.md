@@ -51,6 +51,10 @@ in the repo changes without an explicit `o` or a save during `m`.
 - **`claude/`**: the tracked subset of `~/.claude/` (CLAUDE.md, investigations.md, settings.json,
   statusline.sh, rules/, agents/, commands/, skills/, mcp-servers.sh). Runtime state
   (sessions/, projects/, caches, `*.jsonl`) is gitignored — see `claude/README.md`.
+- **`bin/`**: executable convenience scripts copied to `~/bin` by `INSTALL.sh` (which
+  `.shell_common` puts on PATH). Each file is mirrored by name; `cp -p` keeps the executable
+  bit, so commit scripts with `chmod +x`. e.g. `gh-newrepo` creates a GitHub repo pre-configured
+  to the standard (squash-only, PR-required, linear history).
 
 ## Editing rules specific to this repo
 
@@ -66,6 +70,9 @@ in the repo changes without an explicit `o` or a save during `m`.
   is not flagged.
 - **`claude/settings.json` churns.** Claude Code rewrites it when you toggle plugins or change
   permissions; review diffs before committing and never let secrets land in it.
+- **Adding a convenience script**: drop an executable file under `bin/` (`chmod +x`), then
+  `./INSTALL.sh` copies it to `~/bin`. Both `INSTALL.sh` and `sync.sh` walk `bin/` recursively
+  by basename — no array to update (unlike the `DOTFILES` list).
 
 ## Secrets / machine-local values
 
