@@ -59,8 +59,10 @@ doesn't break your shell or `~/.claude/`.
 | `./sync.sh`    | home → repo | You edited a dotfile or claude config at home and want to capture it |
 
 Both scripts:
-- **Never overwrite without a safety net.** INSTALL.sh writes a timestamped
-  backup if your home file differs. sync.sh shows the diff and asks per file.
+- **Never overwrite without a safety net.** Both show the diff and prompt per
+  file when a file differs (INSTALL.sh toward home, sync.sh toward the repo).
+  INSTALL.sh falls back to a timestamped backup + overwrite only when run with no
+  tty (unattended).
 - **Are idempotent.** Identical files are skipped silently.
 - Support `--dry-run` to preview without changing anything.
 

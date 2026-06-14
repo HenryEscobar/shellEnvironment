@@ -11,8 +11,10 @@
 # Safety:
 #   - Real file copies (not symlinks), so deleting the repo doesn't break ~.
 #   - Idempotent: identical files are skipped silently.
-#   - If a home file DIFFERS from the repo copy, it's backed up to
-#     <name>-YYYYMMDD-HHMMSS before being overwritten. Nothing is nuked.
+#   - If a home file DIFFERS from the repo copy, you're prompted per file
+#     (show diff / [o]verwrite home / [k]eep home / [m]erge / [q]uit). Nothing is
+#     overwritten without your say-so. Non-interactive runs (no tty) fall back to
+#     backup (<name>-YYYYMMDD-HHMMSS) + overwrite so they never hang.
 #   - Use sync.sh to push changes the other way (home -> repo).
 
 set -euo pipefail
@@ -39,11 +41,69 @@ log()  { printf '\033[1;34m[install]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[install]\033[0m %s\n' "$*" >&2; }
 run()  { if [ "$DRY_RUN" -eq 1 ]; then echo "  + $*"; else eval "$@"; fi; }
 
+# Editor used for the [m]erge option. Must be a 2-pane diff tool.
+MERGE_TOOL="${EDITOR:-vimdiff}"
+case "$MERGE_TOOL" in
+    *vimdiff*|*nvim*-d*|*opendiff*|*meld*) ;;   # already diff-capable
+    *) MERGE_TOOL="vimdiff" ;;
+esac
+
+# show_diff <current> <incoming>  (current=home, incoming=repo)
+# Colorized git diff if available, else plain unified diff.
+show_diff() {
+    local cur="$1" inc="$2"
+    if command -v git >/dev/null 2>&1; then
+        git --no-pager diff --no-index --color=always -- "$cur" "$inc" || true
+    else
+        diff -u "$cur" "$inc" || true
+    fi
+}
+
+# prompt_diff <src=repo> <dest=home> — only called when the two differ.
+prompt_diff() {
+    local src="$1" dest="$2"
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  diverges: $dest"
+        return 0
+    fi
+
+    # Non-interactive (no tty): fall back to the old safe behavior so unattended
+    # runs never hang on a prompt — back up, then overwrite.
+    if [ ! -e /dev/tty ]; then
+        log "backup $dest -> $dest-$BACKUP_TAG (non-interactive)"
+        cp -p "$dest" "$dest-$BACKUP_TAG"
+        cp -p "$src" "$dest"
+        log "update $dest"
+        return 0
+    fi
+
+    while true; do
+        echo
+        log "$dest differs from repo."
+        show_diff "$dest" "$src" | sed -n '1,80p'
+        local n; n=$(show_diff "$dest" "$src" | wc -l | tr -d ' ')
+        [ "$n" -gt 80 ] && echo "(diff truncated — $n lines; [s]how full or [m]erge)"
+        printf '\n  [o]verwrite home  [k]eep home  [m]erge in %s  [s]how full diff  [q]uit  > ' "$MERGE_TOOL"
+        read -r choice </dev/tty
+        case "$choice" in
+            o|O) cp -p "$src" "$dest"; log "updated $dest from repo"; return 0 ;;
+            k|K) log "kept home $dest unchanged"; return 0 ;;
+            m|M) "$MERGE_TOOL" "$dest" "$src" </dev/tty >/dev/tty 2>&1 || true
+                 if cmp -s "$src" "$dest"; then log "merged $dest (now identical)"; return 0
+                 else log "still differs after merge — re-prompting"; fi ;;
+            s|S) show_diff "$dest" "$src" | ${PAGER:-less -R} ;;
+            q|Q) warn "quit — remaining files left as-is"; exit 0 ;;
+            *)   echo "  pick o / k / m / s / q" ;;
+        esac
+    done
+}
+
 # copy_one <src> <dest>
 #   - src missing in repo  -> skip with warning
 #   - dest is a symlink    -> remove it (legacy from old INSTALL.sh)
 #   - dest identical       -> skip silently
-#   - dest differs         -> backup with timestamp, then copy
+#   - dest differs         -> prompt per file (prompt_diff)
 #   - dest missing         -> just copy
 copy_one() {
     local src="$1" dest="$2"
@@ -62,13 +122,11 @@ copy_one() {
         if cmp -s "$src" "$dest"; then
             return 0  # identical, nothing to do
         fi
-        log "backup $dest -> $dest-$BACKUP_TAG  (home differs from repo)"
-        run "cp -p '$dest' '$dest-$BACKUP_TAG'"
-        log "update $dest"
-    else
-        log "create $dest"
+        prompt_diff "$src" "$dest"  # differs — ask the user
+        return 0
     fi
 
+    log "create $dest"
     run "mkdir -p '$(dirname "$dest")'"
     run "cp -p '$src' '$dest'"
 }

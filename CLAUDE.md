@@ -20,10 +20,12 @@ section still says "symlinks" in two places — that's stale; `copy_one()` in `I
 | `./INSTALL.sh` | repo → `$HOME` | Fresh machine, or a `git pull` brought new versions to apply locally |
 | `./sync.sh` | `$HOME` → repo | You edited a dotfile / claude config in `$HOME` and want to capture it |
 
-Both are idempotent (identical files skipped), support `--dry-run`, and never destroy data:
-`INSTALL.sh` timestamp-backs-up any differing home file before overwriting; `sync.sh` shows a diff
-and prompts per file (`[o]verwrite repo / [k]eep / [m]erge in $EDITOR / [s]how / [q]uit`) — nothing
-in the repo changes without an explicit `o` or a save during `m`.
+Both are idempotent (identical files skipped), support `--dry-run`, and never destroy data. They
+prompt per differing file (mirrored, opposite directions): `INSTALL.sh` shows a diff and asks
+`[o]verwrite home / [k]eep home / [m]erge in $EDITOR / [s]how / [q]uit` (non-interactive runs with
+no tty fall back to timestamped backup + overwrite); `sync.sh` does the same toward the repo
+(`[o]verwrite repo / [k]eep / [m]erge / [s]how / [q]uit`). Nothing is overwritten without an
+explicit `o` or a save during `m`.
 
 ## Common commands
 
