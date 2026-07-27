@@ -15,10 +15,10 @@ them, in opposite directions. **Files are real copies, not symlinks** (deleting 
 break the live shell or `~/.claude/`). Note: README's "What changed from the Linux-era setup"
 section still says "symlinks" in two places — that's stale; `copy_one()` in `INSTALL.sh` does `cp`.
 
-| Script | Direction | Use when |
-| --- | --- | --- |
-| `./INSTALL.sh` | repo → `$HOME` | Fresh machine, or a `git pull` brought new versions to apply locally |
-| `./sync.sh` | `$HOME` → repo | You edited a dotfile / claude config in `$HOME` and want to capture it |
+| Script         | Direction      | Use when                                                               |
+| -------------- | -------------- | ---------------------------------------------------------------------- |
+| `./INSTALL.sh` | repo → `$HOME` | Fresh machine, or a `git pull` brought new versions to apply locally   |
+| `./sync.sh`    | `$HOME` → repo | You edited a dotfile / claude config in `$HOME` and want to capture it |
 
 Both are idempotent (identical files skipped), support `--dry-run`, and never destroy data. They
 prompt per differing file (mirrored, opposite directions): `INSTALL.sh` shows a diff and asks
@@ -51,8 +51,11 @@ explicit `o` or a save during `m`.
 - **`host-os/`**: one-shot macOS bootstrap — Xcode CLT → Homebrew → `Brewfile` → `npm-globals.sh`.
   Darwin-only (aborts otherwise). Idempotent; npm step is allowed to fail without aborting.
 - **`claude/`**: the tracked subset of `~/.claude/` (CLAUDE.md, investigations.md, settings.json,
-  statusline.sh, rules/, agents/, commands/, skills/, mcp-servers.sh). Runtime state
+  statusline.sh, rules/, agents/, commands/, skills/, hooks/, mcp-servers.sh). Runtime state
   (sessions/, projects/, caches, `*.jsonl`) is gitignored — see `claude/README.md`.
+  `hooks/` holds hook scripts referenced from `settings.json` plus the `package.json` /
+  `package-lock.json` for their dependencies; `claude/hooks/.gitignore` keeps `node_modules/`
+  and the bootstrap log out of the repo.
 - **`bin/`**: executable convenience scripts copied to `~/bin` by `INSTALL.sh` (which
   `.shell_common` puts on PATH). Each file is mirrored by name; `cp -p` keeps the executable
   bit, so commit scripts with `chmod +x`. e.g. `gh-newrepo` creates a GitHub repo pre-configured
@@ -66,6 +69,11 @@ explicit `o` or a save during `m`.
 - **Adding a claude config file**: drop it under `claude/<path>`, then `./INSTALL.sh --claude`.
   `INSTALL.sh` walks `claude/` recursively but skips `README.md` and `.gitkeep`; `sync.sh`
   additionally skips `mcp-servers.sh` (it's a generator, not a mirrored file).
+- **`sync.sh` cannot discover new files.** It walks the **repo** side
+  (`find "$REPO_DIR/claude"`, `find "$REPO_DIR/bin"`) and compares each repo file to its `$HOME`
+  twin. A file created in `~/.claude/` or `~/bin` that has no repo counterpart is therefore
+  invisible to it — `./sync.sh` will never report it and never capture it. New files must be
+  copied into the repo by hand once; only then does `sync.sh` track them thereafter.
 - **Adding an MCP server**: `claude mcp add <name> --scope user -- <cmd> <args>` to test, then
   append the matching `add_user_mcp` line to `claude/mcp-servers.sh`; `./sync.sh --mcp` should
   then report "in sync". Drift detection is **name-only** — same name with a different command

@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'CMD=$(jq -r \".tool_input.command\" <<< \"$(cat)\"); for p in \"rm -rf /\" \"rm -rf ~\" \"DROP TABLE\" \"DROP DATABASE\" \"TRUNCATE\" \"push.*--force\" \"push.*-f \" \"reset --hard\"; do if echo \"$CMD\" | grep -qiE \"$p\"; then echo \"Blocked: destructive pattern \\\"$p\\\" detected\" >&2; exit 2; fi; done; exit 0'"
+            "command": "bash \"$HOME/.claude/hooks/block-destructive-bash.sh\""
           }
         ]
       },
@@ -86,7 +86,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'FILE=$(jq -r \".tool_input.file_path\" <<< \"$(cat)\"); for p in \".env\" \".git/\" \"id_rsa\" \"id_ed25519\" \".pem\"; do if [[ \"$FILE\" == *\"$p\"* ]]; then echo \"Blocked: $FILE matches protected pattern $p\" >&2; exit 2; fi; done; exit 0'"
+            "command": "bash \"$HOME/.claude/hooks/block-protected-paths.sh\""
           }
         ]
       },
@@ -95,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'CMD=$(jq -r \".tool_input.command\" <<< \"$(cat)\"); if echo \"$CMD\" | grep -qiE \"gws[[:space:]]+(gmail|script)([[:space:]]|$)|gws[[:space:]]+drive[[:space:]]+files[[:space:]]+(delete|emptyTrash)|gws[[:space:]]+auth[[:space:]]+(export|logout)\"; then echo \"Blocked: high-risk gws command (gmail/script, drive delete or emptyTrash, auth export/logout) is not permitted for the agent\" >&2; exit 2; fi; exit 0'"
+            "command": "bash \"$HOME/.claude/hooks/block-risky-gws.sh\""
           }
         ]
       }
@@ -106,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'FILE=$(jq -r \".tool_input.file_path // empty\" <<< \"$(cat)\"); [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE \"\\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|css|scss|less|html|md|mdx|ya?ml|graphql)$\" && npx --no-install prettier --write \"$FILE\" >/dev/null 2>&1; true'"
+            "command": "bash \"$HOME/.claude/hooks/prettier-format.sh\""
           }
         ]
       }
