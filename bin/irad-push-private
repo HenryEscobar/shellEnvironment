@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# irad-push-private — push the gitignored / uncommitted / non-repo "private" data
+# from ~/irad to a remote host over SSH.
+#
+# Run this ON THE SOURCE machine (the Air). It pushes TO the destination below.
+# Additive only: it never deletes anything on the remote (no --delete).
+#
+# What it sends, per top-level entry in ~/irad:
+#   - git repos : ONLY files git doesn't have — gitignored files + untracked files.
+#                 Tracked files (even if locally modified) are NEVER sent, so nothing
+#                 already committed (locally or on the remote) is overwritten.
+#   - non-repos : the whole directory
+#   - loose files at the ~/irad root
+# What it skips: regenerable junk (node_modules, .git, tool caches, build dirs).
+#   NOTE: the skip list matches exact cache names only — it deliberately does NOT
+#   match data/cache, so the options/positioning snapshots (schwab/data, macro/data)
+#   ARE included.
+#
+# Usage:
+#   irad-push-private              # do it
+#   irad-push-private --dry-run    # show what would transfer, change nothing
+#
+# Destination is hardcoded below. You can still override per-run with env vars, e.g.:
+#   IRAD_DEST_HOST=192.168.1.99 irad-push-private
+
+set -euo pipefail
+
+# ---------------------------------------------------------------- config
+DEST_USER="${IRAD_DEST_USER:-hescobar}"          # remote username
+DEST_HOST="${IRAD_DEST_HOST:-192.168.1.243}"     # remote host
+DEST_BASE="${IRAD_DEST_BASE:-irad}"              # path under the remote $HOME
+SRC="${IRAD_SRC:-$HOME/irad}"
+
+DRY=""
+[ "${1:-}" = "--dry-run" ] && DRY="--dry-run"
+
+REMOTE="$DEST_USER@$DEST_HOST"
+
+# Reuse a single SSH connection for all the rsync calls.
+SSH="ssh -o ControlMaster=auto -o ControlPath=$HOME/.ssh/cm-%r@%h:%p -o ControlPersist=120 -o ConnectTimeout=5"
+
+# Regenerable junk, matched by exact directory name. Does NOT match data/ or */cache.
+JUNK_RE='(^|/)(node_modules|\.git|\.DS_Store|__pycache__|\.ruff_cache|\.pytest_cache|\.mypy_cache|\.venv|venv|\.next|\.turbo|\.expo|\.playwright-mcp|dist|build|coverage)(/|$)|(^|/)\.husky/_(/|$)'
+
+RSYNC_EXCLUDES=(
+  --exclude='.git/'            --exclude='node_modules/'
+  --exclude='.DS_Store'        --exclude='__pycache__/'
+  --exclude='.ruff_cache/'     --exclude='.pytest_cache/'
+  --exclude='.mypy_cache/'     --exclude='.venv/'
+  --exclude='venv/'            --exclude='.next/'
+  --exclude='.turbo/'          --exclude='.expo/'
+  --exclude='.playwright-mcp/' --exclude='.husky/_/'
+  --exclude='dist/'            --exclude='build/'
+  --exclude='coverage/'
+)
+
+# macOS ships openrsync (no --info=); --stats works on both it and GNU rsync.
+RSYNC=(rsync -aH --stats ${DRY:+$DRY})
+
+# ---------------------------------------------------------------- preflight
+[ -d "$SRC" ] || { echo "!! source $SRC not found"; exit 1; }
+echo ">> source : $SRC"
+echo ">> dest   : $REMOTE:~/$DEST_BASE  ${DRY:+ [DRY RUN]}"
+
+if ! $SSH "$REMOTE" true 2>/dev/null; then
+  echo "!! cannot ssh to $REMOTE — check host/user and that the machine is awake"
+  exit 1
+fi
+$SSH "$REMOTE" "mkdir -p '$DEST_BASE'"
+
+# ---------------------------------------------------------------- helpers
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+push_repo() {            # $1 = relative entry (a git repo)
+  local rel="$1" dir="$SRC/$1"
+  # Only files git does NOT have: gitignored + untracked. Tracked files (even if
+  # locally modified) are deliberately excluded, so nothing committed is overwritten.
+  (
+    cd "$dir"
+    git ls-files -o -i --exclude-standard --directory   # ignored (collapsed)
+    git ls-files -o    --exclude-standard --directory   # untracked new (collapsed)
+  ) | grep -vE "$JUNK_RE" | sort -u > "$tmp" || true
+
+  if [ ! -s "$tmp" ]; then
+    echo "   $rel: nothing private to send"
+    return
+  fi
+  echo ">> $rel  ($(wc -l < "$tmp" | tr -d ' ') paths)"
+  "${RSYNC[@]}" --files-from="$tmp" "${RSYNC_EXCLUDES[@]}" \
+    -e "$SSH" "$dir/" "$REMOTE:$DEST_BASE/$rel/"
+}
+
+push_plain() {           # $1 = relative entry (non-repo dir)
+  local rel="$1" dir="$SRC/$1"
+  echo ">> $rel  (whole dir)"
+  "${RSYNC[@]}" "${RSYNC_EXCLUDES[@]}" -e "$SSH" "$dir/" "$REMOTE:$DEST_BASE/$rel/"
+}
+
+# ---------------------------------------------------------------- run
+cd "$SRC"
+for entry in */ ; do
+  rel="${entry%/}"
+  if [ -d "$rel/.git" ]; then push_repo "$rel"; else push_plain "$rel"; fi
+done
+
+# loose files at the ~/irad root (e.g. local-llm-sitrep.md)
+find "$SRC" -maxdepth 1 -type f ! -name '.DS_Store' -exec basename {} \; > "$tmp" || true
+if [ -s "$tmp" ]; then
+  echo ">> (root files: $(wc -l < "$tmp" | tr -d ' '))"
+  "${RSYNC[@]}" --files-from="$tmp" -e "$SSH" "$SRC/" "$REMOTE:$DEST_BASE/"
+fi
+
+echo ">> done${DRY:+ (dry run — nothing was written)}"

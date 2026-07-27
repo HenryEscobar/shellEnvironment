@@ -114,6 +114,43 @@ When you spot these smells, suggest the refactoring _and_ name why:
 - Prefer interfaces over types for object shapes in TypeScript
 - Avoid `any` — use `unknown` if type is truly unknown
 
+## Pull Requests
+
+**Every PR description must stand alone.** A reviewer opening it cold — no context from the
+session that produced it, no other tabs — must be able to understand what changed and why from
+the description alone.
+
+- **Do not require the reader to open another document.** Never write "see the plan", "per the
+  audit", "batch B3 of X.md" as the explanation. If a finding, plan, or investigation motivated
+  the change, restate the relevant part **in the PR** in a sentence or two. Link to the source
+  as a citation for someone who wants more, never as a substitute for the explanation.
+- **State the problem before the fix**, concretely enough to be checked: the actual failure, the
+  measured number, the file and line, the reproduction. "Fixes the contrast issue" is not a
+  problem statement; "textMuted measured 3.36:1 on the light background, failing WCAG AA on the
+  labels that tell the user what to do next" is.
+- **Say what you verified and how**, including what you could not verify. Paste the real test
+  counts and command output rather than asserting green.
+- **Attach before/after screenshots for every user-visible UI change.** Any change to layout,
+  copy, color, spacing, states (empty/loading/error), or navigation needs images in the PR body,
+  not just a description of them. Capture both states at the same viewport and theme so the
+  diff is the only variable; include dark mode too if the change touches color. For a multi-step
+  flow, attach one frame per step or a short clip. If the change is visual but you genuinely
+  could not capture it (no simulator, no device, headless CI), say so explicitly and say why;
+  never silently omit.
+- **Include runnable sample API calls for every endpoint change.** New endpoints, changed
+  request or response shapes, new query params, changed auth, and changed status codes all need
+  a real `curl` (or equivalent) with realistic values, paired with the actual response body you
+  received. Paste real output, never a hand-written example of what you expect it to return.
+  Cover the error path too (the 4xx/5xx a caller will hit), and redact tokens, keys, and
+  personal data before pasting.
+- **Record what you deliberately left out** and why. A reviewer cannot tell an intentional
+  scope boundary from an oversight unless you say.
+- **If a premise turned out to be wrong, lead with that.** A PR that disproves the finding it
+  was meant to implement is more valuable than one that quietly implements it anyway — say so
+  in the title if it changes what the PR is.
+- Same rule for commit messages: `git log` is read years later by people with no access to the
+  planning doc, and often after the doc is gone.
+
 ## Code Review
 
 The harness ships `/code-review` (effort: low/medium/high/max/ultra; `--comment` posts inline

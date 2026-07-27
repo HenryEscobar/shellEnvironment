@@ -70,7 +70,6 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "model": "claude-opus-4-8",
   "hooks": {
     "PreToolUse": [
       {
@@ -134,8 +133,9 @@
     "pyright-lsp@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true
   },
+  "tui": "default",
   "skipWorkflowUsageWarning": true,
   "theme": "dark",
   "showTurnDuration": true,
-  "tui": "fullscreen"
+  "agentPushNotifEnabled": true
 }
