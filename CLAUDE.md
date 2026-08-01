@@ -8,6 +8,22 @@ Personal dotfiles + macOS machine setup (Apple Silicon first; most dotfiles also
 There is no build/test/lint toolchain — it's Bash scripts plus config files. "Running" it means
 invoking the install/sync scripts.
 
+## Do not edit tracked files in this repo directly
+
+**The scripts are the interface to this repo. `INSTALL.sh` copies out, `sync.sh` copies back.**
+Every file under `claude/`, `bin/`, and the tracked dotfiles is a copy of something live in
+`$HOME`. Edit the **real** location (`~/.claude/...`, `~/bin/...`, `~/.zshrc`, ...), then run
+`./sync.sh` and choose `o` to bring the change in.
+
+Editing the repo copy directly is wrong in both directions: the live config does not change, so
+you have not fixed anything yet, and the next `./sync.sh` sees the repo diverging **from** home
+and offers to overwrite your edit with the stale home version. Someone answering `o` out of habit
+silently reverts you.
+
+**Ask for explicit permission before editing any tracked file here.** Two exceptions, both
+repo-only files with no `$HOME` twin, safe to edit in place: `.gitignore`, `README.md`,
+`CLAUDE.md`, `LICENSE`, and the scripts themselves (`INSTALL.sh`, `sync.sh`, `host-os/`).
+
 ## Core model: two-way copy between repo and `$HOME`
 
 The repo and `$HOME` hold parallel copies of each tracked file. Two scripts move changes between
@@ -69,11 +85,18 @@ explicit `o` or a save during `m`.
 - **Adding a claude config file**: drop it under `claude/<path>`, then `./INSTALL.sh --claude`.
   `INSTALL.sh` walks `claude/` recursively but skips `README.md` and `.gitkeep`; `sync.sh`
   additionally skips `mcp-servers.sh` (it's a generator, not a mirrored file).
-- **`sync.sh` cannot discover new files.** It walks the **repo** side
-  (`find "$REPO_DIR/claude"`, `find "$REPO_DIR/bin"`) and compares each repo file to its `$HOME`
-  twin. A file created in `~/.claude/` or `~/bin` that has no repo counterpart is therefore
-  invisible to it — `./sync.sh` will never report it and never capture it. New files must be
-  copied into the repo by hand once; only then does `sync.sh` track them thereafter.
+- **`sync.sh` mostly cannot discover new files.** Its main walk is repo-driven
+  (`find "$REPO_DIR/claude"`, `find "$REPO_DIR/bin"`), comparing each repo file to its `$HOME`
+  twin, so a file created in `~/.claude/` or `~/bin` with no repo counterpart is invisible to it.
+  This dropped an entire `~/.claude/hooks/` directory and three skills once (`a46cc88`), then
+  `silent-change-audit` and `weekly-digest` a day later.
+  **One exception, added 2026-08-01:** a second pass walks `$HOME/.claude/skills/*/` and offers
+  any directory with no repo counterpart for adoption (`[a]dopt / [k]eep out / [v]iew / [q]uit`),
+  skipping symlinked skills and anything `.gitignore` excludes, per file as well as per directory.
+  Disable with `--no-adopt`.
+  **Everything else is still blind**: new files under `~/bin`, `~/.claude/hooks/`,
+  `~/.claude/agents/`, `~/.claude/commands/`, `~/.claude/rules/`, and any new dotfile must be
+  copied into the repo by hand once. Only then does `sync.sh` track them thereafter.
 - **Adding an MCP server**: `claude mcp add <name> --scope user -- <cmd> <args>` to test, then
   append the matching `add_user_mcp` line to `claude/mcp-servers.sh`; `./sync.sh --mcp` should
   then report "in sync". Drift detection is **name-only** — same name with a different command
