@@ -54,9 +54,21 @@ done
 READERS="cat|bat|less|more|head|tail|nl|xxd|od|strings|grep|rg|ag|awk|sed|jq|cut|sort|uniq"
 SCRUBBED=$(echo "$CMD" | sed -E 's/\.env\.(example|template|sample)//g')
 
+# Where a command word can begin. A reader only counts at one of these, so that
+# "concatenate" does not read as "cat".
+#
+# The openers of a command substitution belong here too: $(cat .env) and the
+# backtick spelling each start a fresh command, but until 2026-08-01 the class
+# held only the plain separators, so both walked past this check. `export $(cat
+# .env | xargs)` was the live example -- one paren away from the block.
+#
+# Defined once and used by every pattern below. Two copies of a character class
+# is how one of them ends up missing a character.
+CMD_START='(^|[|;&(`[:space:]])'
+
 SECRET_PATHS=(
-  "(^|[|;&[:space:]])($READERS)[^|;&]*\.env([^a-zA-Z0-9_.-]|\.[a-zA-Z0-9_-]+|$)"
-  "(^|[|;&[:space:]])($READERS)[^|;&]*(\.ssh/|\.gnupg/|\.aws/credentials|\.npmrc|id_rsa|id_ed25519)"
+  "$CMD_START($READERS)[^|;&]*\.env([^a-zA-Z0-9_.-]|\.[a-zA-Z0-9_-]+|$)"
+  "$CMD_START($READERS)[^|;&]*(\.ssh/|\.gnupg/|\.aws/credentials|\.npmrc|id_rsa|id_ed25519)"
 )
 
 for p in "${SECRET_PATHS[@]}"; do
