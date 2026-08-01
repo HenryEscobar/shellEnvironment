@@ -6,6 +6,7 @@
 #   ./sync.sh --dry-run      # just list files that diverge; no prompts
 #   ./sync.sh --all          # also walk claude/ (default: yes if claude/ exists)
 #   ./sync.sh --no-claude    # skip claude/
+#   ./sync.sh --no-adopt     # skip the new-skill pass (see below)
 #   ./sync.sh --mcp          # ONLY check MCP-server drift (no file diffs)
 #
 # For each file the repo tracks, compare with the matching file in $HOME:
@@ -18,7 +19,17 @@
 #       [s]how diff again
 #       [q]uit (stop processing further files)
 #
-# Nothing is overwritten without your explicit "o" or "m" + save.
+# That walk is repo-driven: it finds files under claude/ in THIS repo and looks
+# for their twins at home. A skill created only at $HOME is therefore invisible
+# to it, which has silently dropped skills twice. A second pass walks
+# $HOME/.claude/skills/*/ and offers any directory with no repo counterpart:
+#       [a]dopt into repo
+#       [k]eep out
+#       [v]iew its SKILL.md
+#       [q]uit
+# Symlinked skills (owned by another repo) and gitignored paths are skipped.
+#
+# Nothing is overwritten without your explicit "o", "m" + save, or "a".
 
 set -euo pipefail
 
@@ -28,6 +39,7 @@ DRY_RUN=0
 DO_CLAUDE=1
 DO_FILES=1
 DO_MCP=0
+DO_ADOPT=1
 [ -d "$REPO_DIR/claude" ] || DO_CLAUDE=0
 
 for arg in "$@"; do
@@ -35,8 +47,9 @@ for arg in "$@"; do
         --dry-run)    DRY_RUN=1 ;;
         --all)        DO_CLAUDE=1 ;;
         --no-claude)  DO_CLAUDE=0 ;;
+        --no-adopt)   DO_ADOPT=0 ;;
         --mcp)        DO_MCP=1; DO_FILES=0 ;;
-        -h|--help)    sed -n '2,22p' "$0"; exit 0 ;;
+        -h|--help)    sed -n '2,32p' "$0"; exit 0 ;;
         *)            echo "unknown flag: $arg" >&2; exit 2 ;;
     esac
 done
@@ -130,6 +143,81 @@ handle_one() {
     done
 }
 
+# adopt_one_skill <home-skill-dir>
+#
+# The claude/ walk is repo-driven, so a skill directory that exists only at $HOME
+# is never visited by handle_one. This offers such a directory for adoption.
+#
+# Skips, in order: anything the repo already tracks (handle_one owns those),
+# anything without a SKILL.md, and anything .gitignore excludes. Per-file ignore
+# checks matter as much as the directory check: a skill can be adoptable while
+# some of its contents (local-only identifiers, generated baselines) are not.
+adopt_one_skill() {
+    local home_dir="$1"
+    local name; name="$(basename "$home_dir")"
+    local repo_dir="$REPO_DIR/claude/skills/$name"
+
+    if [ -e "$repo_dir" ]; then return 0; fi              # tracked; handle_one has it
+    if [ ! -f "$home_dir/SKILL.md" ]; then return 0; fi   # not a skill
+    if git -C "$REPO_DIR" check-ignore -q "claude/skills/$name"; then
+        return 0                                          # deliberately untracked
+    fi
+
+    local -a files=()
+    local f rel
+    while IFS= read -r -d '' f; do
+        rel="${f#"$home_dir/"}"
+        if git -C "$REPO_DIR" check-ignore -q "claude/skills/$name/$rel"; then
+            continue
+        fi
+        files+=("$f")
+    done < <(find "$home_dir" -type f -print0)
+
+    if [ "${#files[@]}" -eq 0 ]; then
+        warn "skills/$name: every file is gitignored; not adopting"
+        return 0
+    fi
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "  untracked skill: skills/$name (${#files[@]} file(s) adoptable)"
+        return 0
+    fi
+
+    local choice
+    while true; do
+        echo
+        log "skills/$name exists at home but not in this repo. Would add:"
+        for f in "${files[@]}"; do echo "      claude/skills/$name/${f#"$home_dir/"}"; done
+        printf '\n  [a]dopt into repo  [k]eep out  [v]iew SKILL.md  [q]uit  > '
+        read -r choice </dev/tty
+        case "$choice" in
+            a|A)
+                for f in "${files[@]}"; do
+                    rel="${f#"$home_dir/"}"
+                    mkdir -p "$repo_dir/$(dirname "$rel")"
+                    cp -p "$f" "$repo_dir/$rel"
+                done
+                log "adopted skills/$name (${#files[@]} file(s))"
+                return 0
+                ;;
+            k|K)
+                log "left skills/$name untracked"
+                return 0
+                ;;
+            v|V)
+                ${PAGER:-less -R} "$home_dir/SKILL.md" </dev/tty >/dev/tty 2>&1 || true
+                ;;
+            q|Q)
+                warn "quit — remaining files left as-is"
+                exit 0
+                ;;
+            *)
+                echo "  pick a / k / v / q"
+                ;;
+        esac
+    done
+}
+
 # --- File diff mode ---------------------------------------------------------
 if [ "$DO_FILES" -eq 1 ]; then
     DOTFILES=(
@@ -163,6 +251,23 @@ if [ "$DO_FILES" -eq 1 ]; then
             esac
             handle_one "$HOME/.claude/$rel" "$src"
         done < <(find "$REPO_DIR/claude" -type f -print0)
+    fi
+
+    if [ "$DO_CLAUDE" -eq 1 ] && [ "$DO_ADOPT" -eq 1 ] && [ -d "$HOME/.claude/skills" ]; then
+        log "scanning for skills that exist only at home..."
+        symlinked=""
+        while IFS= read -r -d '' d; do
+            if [ -L "$d" ]; then
+                # Owned by another repo (azores.tools, the gws install). Those have
+                # their own version control; adopting a copy here would fork them.
+                symlinked="$symlinked $(basename "$d")"
+                continue
+            fi
+            adopt_one_skill "$d"
+        done < <(find "$HOME/.claude/skills" -mindepth 1 -maxdepth 1 -print0)
+        if [ -n "$symlinked" ]; then
+            log "skipped symlinked skills (owned by other repos):$symlinked"
+        fi
     fi
 fi
 

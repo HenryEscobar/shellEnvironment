@@ -41,4 +41,30 @@ for p in "${PATTERNS[@]}"; do
   fi
 done
 
+# Secret-file reads via the shell.
+#
+# settings.json denies Read(**/.env.*), Read(~/.ssh/**) etc., but those rules bind
+# the Read TOOL only -- `cat backend/.env` through Bash walks straight past them and
+# prints secrets into the transcript. Added 2026-07-28 after a compound call bundled
+# `cat frontend/app/.env.local` with an allowed `pnpm` command; only the interactive
+# prompt caught it.
+#
+# Templates (.env.example / .env.template / .env.sample) are checked in and safe, so
+# they are excluded before matching.
+READERS="cat|bat|less|more|head|tail|nl|xxd|od|strings|grep|rg|ag|awk|sed|jq|cut|sort|uniq"
+SCRUBBED=$(echo "$CMD" | sed -E 's/\.env\.(example|template|sample)//g')
+
+SECRET_PATHS=(
+  "(^|[|;&[:space:]])($READERS)[^|;&]*\.env([^a-zA-Z0-9_.-]|\.[a-zA-Z0-9_-]+|$)"
+  "(^|[|;&[:space:]])($READERS)[^|;&]*(\.ssh/|\.gnupg/|\.aws/credentials|\.npmrc|id_rsa|id_ed25519)"
+)
+
+for p in "${SECRET_PATHS[@]}"; do
+  if echo "$SCRUBBED" | grep -qE "$p"; then
+    echo "Blocked: reading a secrets file through the shell bypasses the Read(**/.env.*) deny rules." >&2
+    echo "If you need a specific value, ask the user for it. To list files, use ls or Glob." >&2
+    exit 2
+  fi
+done
+
 exit 0
