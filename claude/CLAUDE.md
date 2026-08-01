@@ -95,6 +95,25 @@ When you spot these smells, suggest the refactoring _and_ name why:
 - Feature Envy (method uses another class's data more than its own) → Move it
 - Primitive Obsession (strings/ints representing domain concepts) → Value Object
 
+## My Skills — reach for these instead of improvising
+
+The harness already lists every available skill with its description, so this section does not repeat them. It records the two things that list cannot tell you: **which are mine** (built deliberately, for a reason worth honouring) and **how they compose**.
+
+**Review and reporting.** Each runs standalone against one repo, reads and writes only inside that repo, and requires no other skill. They compose well; they do not depend on each other.
+
+- `silent-change-audit` — finds behaviour changes that were not the headline of the PR that made them. Expensive (four-agent fan-out). Run before a release cut, or after a batch of parallel-agent PRs. Writes a dated baseline to `docs/audits/` in the repo it audited.
+- `weekly-digest` — cheap weekly "where are we, what do I need to decide". Writes to `docs/digests/` in the repo. If that repo has `docs/audits/`, it cites the newest instead of re-deriving; if not, it just runs. Also runs as a scheduled cloud agent every Monday; that routine holds an inlined copy of the skill, so edits must be made in both places (see the skill's Maintenance section, and `routines.local.md` beside it for which routine).
+- `checkpoint` — writes a self-contained plan a fresh session can execute. Use before a context clear, not after.
+- `investigate` — creates the dated `docs/investigations/` entry. Use for any root cause worth remembering.
+
+**Judgement, not automation.** `board` (advisory panel), `qa` (adversarial testing), `cabin` (intensive multi-workstream session). These burn real tokens; say so before starting one.
+
+**Routine.** `pr`, `test`, `code-analysis`.
+
+**Domain, unrelated to code.** `tradelog`, `positioning`, `macro` (trading); `gws-*` (Google Workspace).
+
+Two standing rules for this set: a skill that writes a dated artifact should never overwrite an older one, and if a skill's instructions are duplicated anywhere (a cloud routine, a project copy), the skill file must say where, or the copies drift silently.
+
 ## Interaction Style
 
 - Analyze existing code/requirements first

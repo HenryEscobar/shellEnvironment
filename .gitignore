@@ -53,3 +53,14 @@ claude/*.jsonl
 claude/*-cache.json
 claude/.last-*
 claude/mcp-needs-auth-cache.json
+
+# Legacy. silent-change-audit used to write dated baselines here, one dir per audited
+# repo; it now writes to docs/audits/ inside the repo it audited, so nothing new lands
+# here. The old directory still exists at $HOME on machines that ran the skill before
+# 2026-08-01, and those files carry file:line anchors into private repos while this repo
+# is public. Kept as a guard so a future sync cannot sweep them in.
+claude/skills/silent-change-audit/baselines/
+
+# weekly-digest's scheduled-routine identifiers (names a private repo, holds a trigger
+# id). SKILL.md points at this file; the file itself stays local.
+claude/skills/weekly-digest/routines.local.md
