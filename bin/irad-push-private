@@ -27,7 +27,7 @@ set -euo pipefail
 
 # ---------------------------------------------------------------- config
 DEST_USER="${IRAD_DEST_USER:-hescobar}"          # remote username
-DEST_HOST="${IRAD_DEST_HOST:-192.168.1.243}"     # remote host
+DEST_HOST="${IRAD_DEST_HOST:-192.168.1.244}"     # remote host
 DEST_BASE="${IRAD_DEST_BASE:-irad}"              # path under the remote $HOME
 SRC="${IRAD_SRC:-$HOME/irad}"
 
