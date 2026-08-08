@@ -2,11 +2,24 @@
 # INSTALL.sh — copy this repo's files into $HOME (repo -> home).
 #
 # Usage:
-#   ./INSTALL.sh                # dotfiles only
-#   ./INSTALL.sh --claude       # also copy claude/* into ~/.claude/
+#   ./INSTALL.sh                # dotfiles + bin/ + claude/   <- the default
+#   ./INSTALL.sh --no-claude    # dotfiles + bin/ only, leave ~/.claude/ alone
+#   ./INSTALL.sh --mcp          # also (re)register user-scope MCP servers
 #   ./INSTALL.sh --host-os      # also run host-os/bootstrap.sh first
-#   ./INSTALL.sh --all          # everything
+#   ./INSTALL.sh --all          # host-os + dotfiles + bin + claude + MCP
 #   ./INSTALL.sh --dry-run      # print actions, change nothing
+#
+# Why claude/ is on by default:
+#   ~/.claude/ is the bulk of what this repo keeps in sync, and sync.sh has
+#   always walked claude/ by default. Having the two directions disagree meant
+#   a plain ./INSTALL.sh silently applied half of what a plain ./sync.sh
+#   captured. `--claude` is still accepted as a no-op so old habits keep working.
+#
+# Why MCP registration is NOT on by default:
+#   It isn't a file copy — it shells out to the `claude` CLI to remove-then-add
+#   user-scope servers, needs the network (npx), and needs the API keys from
+#   ~/.zshrc-local. That's fresh-machine setup (--all) or an explicit --mcp,
+#   not something every dotfile refresh should redo.
 #
 # Safety:
 #   - Real file copies (not symlinks), so deleting the repo doesn't break ~.
@@ -23,19 +36,30 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_TAG="$(date +%Y%m%d-%H%M%S)"
 
 DRY_RUN=0
-DO_CLAUDE=0
+DO_CLAUDE=1
 DO_HOST_OS=0
+DO_MCP=0
+# Nothing to copy if this checkout has no claude/ dir (mirrors sync.sh).
+[ -d "$REPO_DIR/claude" ] || DO_CLAUDE=0
 
 for arg in "$@"; do
     case "$arg" in
-        --dry-run) DRY_RUN=1 ;;
-        --claude)  DO_CLAUDE=1 ;;
-        --host-os) DO_HOST_OS=1 ;;
-        --all)     DO_CLAUDE=1; DO_HOST_OS=1 ;;
-        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
-        *)         echo "unknown flag: $arg" >&2; exit 2 ;;
+        --dry-run)   DRY_RUN=1 ;;
+        --claude)    DO_CLAUDE=1 ;;   # no-op: on by default. Kept for muscle memory.
+        --no-claude) DO_CLAUDE=0 ;;
+        --mcp)       DO_MCP=1 ;;
+        --host-os)   DO_HOST_OS=1 ;;
+        --all)       DO_CLAUDE=1; DO_HOST_OS=1; DO_MCP=1 ;;
+        -h|--help)   sed -n '2,31p' "$0"; exit 0 ;;
+        *)           echo "unknown flag: $arg" >&2; exit 2 ;;
     esac
 done
+
+# --mcp without claude/ files is legal (re-register servers only), but --mcp
+# after --no-claude is worth a word so it doesn't look like a silent skip.
+if [ "$DO_MCP" -eq 1 ] && [ "$DO_CLAUDE" -eq 0 ]; then
+    echo "[install] --mcp: registering MCP servers only; ~/.claude/ files untouched." >&2
+fi
 
 log()  { printf '\033[1;34m[install]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[install]\033[0m %s\n' "$*" >&2; }
@@ -177,8 +201,8 @@ if [ -d "$REPO_DIR/bin" ]; then
     done < <(find "$REPO_DIR/bin" -type f -print0)
 fi
 
-# --- 3. Claude config (optional) --------------------------------------------
-if [ "$DO_CLAUDE" -eq 1 ]; then
+# --- 3. Claude config (on by default; --no-claude to skip) -------------------
+if [ "$DO_CLAUDE" -eq 1 ] && [ -d "$REPO_DIR/claude" ]; then
     log "Copying claude/* into ~/.claude/..."
     run "mkdir -p '$HOME/.claude'"
 
@@ -189,14 +213,18 @@ if [ "$DO_CLAUDE" -eq 1 ]; then
         esac
         copy_one "$src" "$HOME/.claude/$rel"
     done < <(find "$REPO_DIR/claude" -type f -print0)
+fi
 
-    # Register user-scope MCP servers. Needs the `claude` CLI (installed by
-    # host-os bootstrap via npm-globals). Servers that take an API key read it
-    # from ~/.zshrc-local — set those there first, or they register keyless.
+# --- 4. MCP servers (opt-in: --mcp or --all) ---------------------------------
+# Not a file copy: this removes-then-adds user-scope servers through the
+# `claude` CLI (installed by host-os bootstrap via npm-globals). Servers that
+# take an API key read it from ~/.zshrc-local — set those there first, or the
+# generator aborts on the unset variable.
+if [ "$DO_MCP" -eq 1 ]; then
     if command -v claude >/dev/null 2>&1; then
         log "Registering MCP servers (claude/mcp-servers.sh)..."
         if [ -z "${STRIPE_SECRET_KEY:-}" ]; then
-            warn "STRIPE_SECRET_KEY not set — stripe will register without a key."
+            warn "STRIPE_SECRET_KEY not set — mcp-servers.sh will abort on it."
             warn "Set it in ~/.zshrc-local, then re-run: ./claude/mcp-servers.sh"
         fi
         run "'$REPO_DIR/claude/mcp-servers.sh'"

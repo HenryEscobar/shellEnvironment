@@ -7,7 +7,7 @@ dotfiles work on Linux too.
 
 ```
 .
-├── INSTALL.sh           # repo -> home: copy dotfiles + (optional) claude/ into ~
+├── INSTALL.sh           # repo -> home: copy dotfiles + bin/ + claude/ into ~
 ├── sync.sh              # home -> repo: interactively capture edits made in ~
 ├── .shell_common        # aliases + functions sourced by both bash and zsh
 ├── .bashrc / .zshrc     # shell-specific bits; each sources .shell_common
@@ -32,16 +32,39 @@ cd ~/irad/shellEnvironment
 ./INSTALL.sh --all
 ```
 
-`--all` runs `host-os/bootstrap.sh` first, then copies dotfiles and `claude/`,
-then registers MCP servers via `claude/mcp-servers.sh`. Preview it all with
-`./INSTALL.sh --dry-run --all`. Narrower runs: `./INSTALL.sh` (dotfiles only),
-`./INSTALL.sh --claude` (dotfiles + claude + MCP), `./INSTALL.sh --host-os`.
+`--all` runs `host-os/bootstrap.sh` first, then copies dotfiles, `bin/`, and
+`claude/`, then registers MCP servers via `claude/mcp-servers.sh`. Preview it
+all with `./INSTALL.sh --dry-run --all`.
+
+### What a plain `./INSTALL.sh` does
+
+**Dotfiles, `bin/`, and `claude/` — all three, every run.** `~/.claude/` is the
+bulk of what this repo keeps in sync, and `sync.sh` has always walked `claude/`
+by default; when only `INSTALL.sh` needed a flag, a plain `./INSTALL.sh` applied
+half of what a plain `./sync.sh` captured. Both directions now default to the
+same set.
+
+| Run                        | Does                                               |
+| -------------------------- | -------------------------------------------------- |
+| `./INSTALL.sh`             | dotfiles + `bin/` + `claude/`                      |
+| `./INSTALL.sh --no-claude` | dotfiles + `bin/` only; leaves `~/.claude/` alone  |
+| `./INSTALL.sh --mcp`       | the default, plus MCP server registration          |
+| `./INSTALL.sh --host-os`   | the default, with `host-os/bootstrap.sh` run first |
+| `./INSTALL.sh --all`       | host-os + dotfiles + `bin/` + `claude/` + MCP      |
+
+`--claude` still works; it's now a no-op, kept so old habits don't error out.
+
+**MCP registration is deliberately not in the default run.** It isn't a file
+copy: it shells out to the `claude` CLI to remove-then-add user-scope servers,
+needs the network (`npx`), and needs the keys from `~/.zshrc-local`. That's
+fresh-machine setup (`--all`) or an explicit `--mcp`, not something a routine
+dotfile refresh should redo.
 
 **One manual prerequisite — secrets can't be cloned.** Before MCP servers that
 need a key will work, create `~/.zshrc-local` (gitignored) with e.g.
 `export STRIPE_SECRET_KEY="sk_test_..."`, then re-run `./claude/mcp-servers.sh`.
-If the key isn't set when `--all` runs, that server registers keyless and the
-install warns you.
+If the key isn't set when `--all` or `--mcp` runs, `mcp-servers.sh` aborts on
+the unset variable; the install warns you before it gets there.
 
 ## How the two scripts relate
 
@@ -53,12 +76,13 @@ doesn't break your shell or `~/.claude/`.
    repo <-------- sync.sh ----------  $HOME
 ```
 
-| Script | Direction | When to use |
-| --- | --- | --- |
+| Script         | Direction   | When to use                                                                |
+| -------------- | ----------- | -------------------------------------------------------------------------- |
 | `./INSTALL.sh` | repo → home | Fresh machine, or `git pull` brought new versions you want applied locally |
-| `./sync.sh`    | home → repo | You edited a dotfile or claude config at home and want to capture it |
+| `./sync.sh`    | home → repo | You edited a dotfile or claude config at home and want to capture it       |
 
 Both scripts:
+
 - **Never overwrite without a safety net.** Both show the diff and prompt per
   file when a file differs (INSTALL.sh toward home, sync.sh toward the repo).
   INSTALL.sh falls back to a timestamped backup + overwrite only when run with no
@@ -86,14 +110,14 @@ Claude Code stores MCP server config in `~/.claude.json`, **not** in
 `~/.claude/settings.json`. That file mixes config with churning state and
 sometimes holds tokens, so we don't track it directly. Instead:
 
-| File | What |
-| --- | --- |
-| `claude/mcp-servers.sh` | Declarative `claude mcp add` lines for every user-scope MCP. Run it to install. |
-| `./sync.sh --mcp` | Diff what's installed locally vs declared in the script. Tells you what to add to the script (or what to install). |
+| File                    | What                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `claude/mcp-servers.sh` | Declarative `claude mcp add` lines for every user-scope MCP. Run it to install.                                    |
+| `./sync.sh --mcp`       | Diff what's installed locally vs declared in the script. Tells you what to add to the script (or what to install). |
 
 ### Adding a new MCP
 
-1. `claude mcp add <name> --scope user -- <command> <args...>`  — try it locally.
+1. `claude mcp add <name> --scope user -- <command> <args...>` — try it locally.
 2. Once it works, append the same line to `claude/mcp-servers.sh`.
 3. `./sync.sh --mcp` should report "in sync".
 
@@ -125,26 +149,29 @@ are device-bound and shouldn't sync.
 Anything secret or machine-specific goes in a `*-local` file that lives in
 `~` but **not** in this repo:
 
-| Shared (tracked) | Local (gitignored) |
-| --- | --- |
-| `~/.zshrc` | `~/.zshrc-local` |
-| `~/.zprofile` | `~/.zprofile-local` |
-| `~/.bashrc` | `~/.bashrc-local` |
+| Shared (tracked) | Local (gitignored)  |
+| ---------------- | ------------------- |
+| `~/.zshrc`       | `~/.zshrc-local`    |
+| `~/.zprofile`    | `~/.zprofile-local` |
+| `~/.bashrc`      | `~/.bashrc-local`   |
 
 Each shared file sources its `-local` twin last, so local values win.
 
 ## Sections
 
 ### Dotfiles
+
 `.shell_common` holds anything portable (aliases, `title()`, Homebrew shellenv,
 PATH additions). `.bashrc` / `.zshrc` add shell-specific options (history,
 prompt, completion). `.tmux.conf` auto-picks `pbcopy`/`pbpaste` on macOS and
 `xclip` on Linux for clipboard binds.
 
 ### `host-os/`
+
 One-shot macOS bootstrap. See [host-os/README.md](host-os/README.md).
 
 ### `claude/`
+
 Hand-picked subset of `~/.claude/` (CLAUDE.md, rules, agents, commands, skills).
 Runtime state (sessions, history, caches) is gitignored. See
 [claude/README.md](claude/README.md) for the migration workflow and a
@@ -154,8 +181,8 @@ deliberate note on **not** tracking `settings.json` by default.
 
 - Shell config now targets zsh first; `.bashrc` is kept for non-macOS hosts.
 - Tmux clipboard uses `pbcopy`/`pbpaste` on Darwin.
-- `INSTALL.sh` uses **symlinks** (not hardlinks), backs up non-symlink
-  collisions with a timestamp, and is idempotent.
+- `INSTALL.sh` uses **real copies** (not symlinks), prompts per differing file
+  (timestamped backup + overwrite only when run with no tty), and is idempotent.
 - New `host-os/` and `claude/` sections.
 - `.gitignore` blocks `*-local`, SSH keys, `.env*`, macOS junk, and Claude
   runtime state.

@@ -28,8 +28,13 @@ repo-only files with no `$HOME` twin, safe to edit in place: `.gitignore`, `READ
 
 The repo and `$HOME` hold parallel copies of each tracked file. Two scripts move changes between
 them, in opposite directions. **Files are real copies, not symlinks** (deleting the repo must not
-break the live shell or `~/.claude/`). Note: README's "What changed from the Linux-era setup"
-section still says "symlinks" in two places — that's stale; `copy_one()` in `INSTALL.sh` does `cp`.
+break the live shell or `~/.claude/`); `copy_one()` in `INSTALL.sh` does `cp -p`.
+
+**Both directions default to the same set: dotfiles + `bin/` + `claude/`.** `INSTALL.sh` used to
+hide `claude/` behind `--claude` while `sync.sh` walked it by default, so a plain `./INSTALL.sh`
+applied strictly less than a plain `./sync.sh` captured. `--claude` is now a no-op; `--no-claude`
+opts out. MCP registration is the one thing `INSTALL.sh` does NOT do by default (`--mcp`/`--all`),
+because it shells out to the `claude` CLI and needs keys from `~/.zshrc-local`.
 
 | Script         | Direction      | Use when                                                               |
 | -------------- | -------------- | ---------------------------------------------------------------------- |
@@ -47,9 +52,10 @@ explicit `o` or a save during `m`.
 
 ```sh
 ./host-os/bootstrap.sh        # fresh macOS: Xcode CLT, Homebrew, brew bundle, npm globals
-./INSTALL.sh                  # copy dotfiles into ~
-./INSTALL.sh --claude         # also copy claude/* into ~/.claude/
-./INSTALL.sh --all            # dotfiles + claude + run host-os bootstrap first
+./INSTALL.sh                  # dotfiles + bin/ + claude/* into ~  (claude is DEFAULT)
+./INSTALL.sh --no-claude      # dotfiles + bin/ only, leave ~/.claude/ alone
+./INSTALL.sh --mcp            # the default, plus MCP server registration
+./INSTALL.sh --all            # host-os bootstrap first, then dotfiles + claude + MCP
 ./INSTALL.sh --dry-run --all  # preview everything, change nothing
 
 ./sync.sh                     # interactive capture of home edits back into repo
@@ -80,9 +86,10 @@ explicit `o` or a save during `m`.
 ## Editing rules specific to this repo
 
 - **The tracked-dotfile list is duplicated.** A `DOTFILES=(...)` array appears in both
-  `INSTALL.sh` (~line 87) and `sync.sh` (~line 135). Adding/removing a tracked dotfile means
+  `INSTALL.sh` (~line 169) and `sync.sh` (~line 223). Adding/removing a tracked dotfile means
   editing **both**, or the two directions fall out of sync.
-- **Adding a claude config file**: drop it under `claude/<path>`, then `./INSTALL.sh --claude`.
+- **Adding a claude config file**: drop it under `claude/<path>`, then `./INSTALL.sh`
+  (claude/ is copied by default; `--no-claude` opts out, `--claude` is a kept no-op).
   `INSTALL.sh` walks `claude/` recursively but skips `README.md` and `.gitkeep`; `sync.sh`
   additionally skips `mcp-servers.sh` (it's a generator, not a mirrored file).
 - **`sync.sh` mostly cannot discover new files.** Its main walk is repo-driven

@@ -4,17 +4,17 @@ macOS-specific bootstrap.
 
 ## What's here
 
-| File | Purpose |
-| --- | --- |
-| `bootstrap.sh` | Installs Xcode CLT, Homebrew, runs `brew bundle`, then `npm-globals.sh` |
-| `Brewfile` | Declarative list of CLI tools (and optional casks) |
-| `npm-globals.sh` | Global npm CLIs you invoke from the shell (eas, gworkspace, ...) |
+| File             | Purpose                                                                 |
+| ---------------- | ----------------------------------------------------------------------- |
+| `bootstrap.sh`   | Installs Xcode CLT, Homebrew, runs `brew bundle`, then `npm-globals.sh` |
+| `Brewfile`       | Declarative list of CLI tools (and optional casks)                      |
+| `npm-globals.sh` | Global npm CLIs you invoke from the shell (eas, gworkspace, ...)        |
 
 ## Usage on a fresh Mac
 
 ```sh
 ./host-os/bootstrap.sh        # CLT + Homebrew + brew bundle
-../INSTALL.sh                 # symlink dotfiles into ~
+../INSTALL.sh                 # copy dotfiles + bin/ + claude/ into ~
 ```
 
 Re-run `bootstrap.sh` any time — it's idempotent.

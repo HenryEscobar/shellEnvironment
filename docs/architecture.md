@@ -62,7 +62,7 @@ and the next `sync.sh` will offer to overwrite the edit with the stale `$HOME` v
 
 ```
 shellEnvironment/
-├── INSTALL.sh              repo → $HOME  (212 lines)
+├── INSTALL.sh              repo → $HOME  (240 lines)
 ├── sync.sh                 $HOME → repo  (326 lines)
 ├── CLAUDE.md               agent instructions for this repo (repo-only)
 ├── README.md, LICENSE, .gitignore        (repo-only)
@@ -147,16 +147,18 @@ and every shared file sources its `-local` twin at the end.
 
 ```mermaid
 flowchart TD
-    START["./INSTALL.sh<br/>--claude / --host-os / --all / --dry-run"] --> HOSTOS{"--host-os?"}
+    START["./INSTALL.sh<br/>--no-claude / --mcp / --host-os / --all / --dry-run"] --> HOSTOS{"--host-os?"}
     HOSTOS -->|yes| BOOT["host-os/bootstrap.sh"]
     HOSTOS -->|no| DOT
     BOOT --> DOT["DOTFILES array → copy_one → $HOME"]
     DOT --> SSH[".ssh/config → ~/.ssh/ (mkdir 0700)"]
     SSH --> BIN["find bin/ → ~/bin/&lt;basename&gt;"]
-    BIN --> CL{"--claude?"}
-    CL -->|no| DONE["Done"]
+    BIN --> CL{"claude/ enabled?<br/>(default yes; --no-claude off)"}
+    CL -->|no| MCPQ
     CL -->|yes| WALK["find claude/ recursively → ~/.claude/&lt;rel&gt;<br/>skips README.md and .gitkeep"]
-    WALK --> MCP{"claude CLI on PATH?"}
+    WALK --> MCPQ{"--mcp or --all?"}
+    MCPQ -->|no| DONE["Done"]
+    MCPQ -->|yes| MCP{"claude CLI on PATH?"}
     MCP -->|yes| RUNMCP["run claude/mcp-servers.sh"]
     MCP -->|no| WARN["warn and skip"]
     RUNMCP --> DONE
@@ -164,6 +166,17 @@ flowchart TD
 
     style START fill:#1e3a5f,stroke:#60a5fa,color:#e5e7eb
 ```
+
+**`claude/` is copied on every run.** It used to sit behind `--claude` while `sync.sh` walked
+`claude/` by default, so a plain `./INSTALL.sh` applied strictly less than a plain `./sync.sh`
+captured. Both directions now default to the same set: dotfiles + `bin/` + `claude/`. `--claude`
+is still accepted as a no-op.
+
+**MCP registration is separate and opt-in** (`--mcp`, or `--all`). It is not a file copy: it
+shells out to `claude mcp remove` + `claude mcp add`, needs the network, and needs the keys from
+`~/.zshrc-local` — `mcp-servers.sh` runs under `set -u` and aborts if `STRIPE_SECRET_KEY` is
+unset. Tying that to every dotfile refresh would make a routine run fail on a machine that has no
+keys yet.
 
 ### `copy_one(src, dest)`, the one decision function
 
@@ -313,7 +326,7 @@ or project-scope servers in a project's own `.mcp.json`.
    overwritten without explicit consent (or, non-interactively in `INSTALL.sh` only, a timestamped
    backup first).
 3. **`--dry-run` on both scripts** changes nothing.
-4. **The `DOTFILES=(...)` array is duplicated** in `INSTALL.sh` (~line 145) and `sync.sh`
+4. **The `DOTFILES=(...)` array is duplicated** in `INSTALL.sh` (~line 169) and `sync.sh`
    (~line 223). Adding or removing a tracked dotfile means editing **both**, or the two directions
    fall out of sync. `bin/` and `claude/` have no such array; they are walked with `find`.
 5. **Secrets never enter the repo.** They live in `*-local` files sourced last.
