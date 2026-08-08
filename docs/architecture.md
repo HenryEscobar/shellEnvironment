@@ -6,6 +6,10 @@ This repo is not an application. It is a **two-way file-copy system** between a 
 `$HOME`, plus a one-shot machine bootstrap. There is no build, no test runner, no linter; the
 "runtime" is Bash. This document describes the moving parts and the direction data flows.
 
+Companion to [`CLAUDE.md`](../CLAUDE.md), which carries the working rules. Several facts appear in
+both — the copies-not-symlinks rule, `sync.sh`'s discovery blind spot, the `~line` numbers for the
+duplicated `DOTFILES` array. Change one, change the other in the same commit.
+
 ---
 
 ## 1. The core model
@@ -50,8 +54,7 @@ flowchart LR
 | `sync.sh`              | `$HOME` → repo | Capturing an edit made to the live config    |
 
 **Files are real copies, not symlinks.** `copy_one()` in `INSTALL.sh` does `cp -p`. Deleting the
-repo must not break the live shell or `~/.claude/`. (The README still says "symlinks" in two
-places; that text is stale.)
+repo must not break the live shell or `~/.claude/`.
 
 **The scripts are the interface.** Editing a tracked file inside the repo changes nothing live,
 and the next `sync.sh` will offer to overwrite the edit with the stale `$HOME` version.
