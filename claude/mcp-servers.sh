@@ -59,7 +59,13 @@ add_user_mcp stripe       --env STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" -- npx -y
 #                                         ^^^^^ flag BEFORE the --   ^^ command AFTER
 #
 # Run: ./sync.sh --mcp  to check for drift between this file and what's
-# actually installed on your machine (compares both names AND command+args).
+# actually installed on your machine.
+#
+# Drift detection is NAME-ONLY. sync.sh compares the `add_user_mcp <name>` names
+# here against the names from `claude mcp list`; it never looks at the command
+# or args. A server declared here with one command and installed locally with a
+# different one reports "in sync". Changing a command means re-running this
+# script by hand — nothing will tell you the two sides diverged.
 
 log "done"
 log "verify: claude mcp list"

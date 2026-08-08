@@ -8,6 +8,14 @@ Personal dotfiles + macOS machine setup (Apple Silicon first; most dotfiles also
 There is no build/test/lint toolchain — it's Bash scripts plus config files. "Running" it means
 invoking the install/sync scripts.
 
+**`docs/architecture.md` is the deep reference** — flowcharts for both scripts, the `copy_one`
+decision tree, and the invariants. This file is the working ruleset; that one explains the
+mechanism.
+
+**The two overlap, so they drift.** The copies-not-symlinks rule, `sync.sh`'s discovery blind
+spot, and the `~line` numbers cited for the duplicated `DOTFILES` array all appear in both.
+Changing any of them here means changing them there in the same commit.
+
 ## Do not edit tracked files in this repo directly
 
 **The scripts are the interface to this repo. `INSTALL.sh` copies out, `sync.sh` copies back.**
