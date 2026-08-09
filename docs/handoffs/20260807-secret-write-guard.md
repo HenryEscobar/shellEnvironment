@@ -1,7 +1,7 @@
 # Handoff: close the Bash write path around the secret denies
 
 **Date:** 2026-08-07
-**Status:** Done. Synced, tested, and merged to `main` in PR #9 on 2026-08-07.
+**Status:** Done. Written and tested 2026-08-07; synced and merged to `main` in PR #12 on 2026-08-09.
 **Repos touched:** `~/irad/shellEnvironment` (this repo, tracks `claude/`), `~/.claude` (live config)
 
 This document is self-contained. You do not need the session that produced it.
@@ -20,7 +20,7 @@ None. Kept below as the record of what was carried out.
    tests the repo hook and the copy `INSTALL.sh` installs tests the live hook. Argument 1
    overrides.
 4. Re-run on 2026-08-07 against the repo copy: 30/30 pass. Output pasted in the PR body.
-5. PR #9 opened and merged.
+5. PR #12 opened and merged on 2026-08-09.
 
 `claude/settings.json` needed no action: it was verified byte-identical to `~/.claude/settings.json`
 before the PR was opened. The four inert deny rules (section 3) were removed in PR #8.
