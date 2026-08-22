@@ -119,17 +119,102 @@ Check each of these against what you wrote:
 - **Did you measure, or assume?** Every number should trace to a command you ran.
 - **Is anything load-bearing only in your head?** That is the thing most worth
   writing down.
+- **Does any source-of-truth document now contradict the checkpoint?** Every
+  tracker a project keeps is a file that can disagree with the new plan. The next
+  session will trust whichever it opens first, so leaving one behind silently
+  sends it down a closed path. **The cheapest fix is to have fewer of them: see
+  Step 5.**
 
-## Step 5: Repoint the entry point
+## Step 5: Repoint the entry point, and keep it to two files
 
-Update the project's task file (`TODO.md` or equivalent) so its "start here"
-pointer names the new checkpoint and the exact phrase to say. Put the single most
-important warning from the checkpoint inline there too, since that file is read
-more often than the plan is.
+**Aim for exactly two live trackers.** Everything else is either a pointer or an
+archive. More than two and they drift, because nothing keeps them in step except
+remembering to; the tell is that they all change in the same commit.
 
-Update `SUMMARY.md` (or equivalent session-context file) if the project has one.
+The two that earn their place:
 
-## Step 6: Branch, PR, and tell the user how to resume
+1. **A durable backlog** (`TODO.md` or equivalent) — open tasks, known bugs, and
+   the traps worth carrying between sessions. Long-lived, edited in place.
+2. **The dated checkpoint you just wrote** (`docs/plans/<DATESTAMP>-<slug>.md`) —
+   the executable "what to do next". Never overwritten; a new session writes a
+   new one and the old ones stay as a record.
+
+Update the backlog so its "start here" pointer names the new checkpoint and the
+exact phrase to say. Put the single most important warning from the checkpoint
+inline there too, since that file is read more often than the plan is.
+
+**Any other tracker the project keeps should be shrunk, not maintained.**
+
+- **A session-context file** (`SUMMARY.md` or equivalent) should be a pointer of
+  a few lines: the current checkpoint's path, the resume phrase, and nothing
+  that also exists elsewhere. The moment it carries content of its own it is a
+  third thing to keep in step. If it has grown, cut it back rather than updating
+  it.
+- **A feature-plan file** (`PLAN.md` or equivalent) should keep only what is
+  genuinely durable and lives nowhere else: the product direction, the bets, the
+  reasoning behind them. Implementation detail belongs in the checkpoint. This
+  file is the easiest to leave stale, because unlike the others it is not
+  obviously about "right now", and a stale plan is worse than no plan: it is read
+  as current and acted on.
+
+When you shrink one, **say in it what it is now for and where the rest went**, so
+the next reader does not go looking for the missing sections or paste them back.
+Move nothing to the archive that only exists in one place; a trimmed file should
+lose duplication, never the only copy of a decision.
+
+If a trimmed file and the checkpoint disagree about what remains, that
+disagreement is the finding. Resolve it against the code, not by picking
+whichever document reads more confidently.
+
+**If the project's `CLAUDE.md` names the trackers, update it in the same PR.**
+An instruction file that still declares three sources of truth will have the next
+session recreate the third.
+
+## Step 6: Refresh the durable memory, which is read BEFORE the checkpoint
+
+The checkpoint is opened when someone asks for it. **The memory directory is
+loaded automatically, every session, before anything else.** So a stale fact
+there outranks a correct one in the checkpoint: the next session acts on the
+memory first and only discovers the contradiction later, if at all. A checkpoint
+that leaves the memory stale has not finished the job.
+
+Update `<memory dir>/MEMORY.md` so that at minimum these agree with what you
+measured in Step 1:
+
+- **The current `main` sha**, and the newest checkpoint's path with the resume
+  phrase.
+- **What production actually runs**, and how far behind it is. If a migration is
+  merged but unapplied, say so in the memory too, not only in the checkpoint:
+  that is the fact most likely to cause damage when acted on blind.
+- **Anything measured this session that contradicts a line already there.** Fix
+  the line; do not append a second, newer claim beside it. Two contradicting
+  bullets is worse than one stale one, because now the reader has to adjudicate.
+
+Then consider whether the session produced anything that belongs in memory as
+its own file, rather than in the checkpoint:
+
+- **A checkpoint is superseded; a memory file is not.** Anything true beyond this
+  batch of work belongs in memory. A trap that will still be a trap in three
+  months, a decision about how work gets verified, a fact about the environment.
+- **`type: feedback`** for anything about how to WORK (a verification step that
+  gives false confidence, a tool that lies about its own status). These are the
+  ones most often left in the transcript and lost.
+- **`type: project`** for a constraint or goal not derivable from the code.
+- Update an existing file rather than adding a near-duplicate, and delete one
+  that has turned out to be wrong.
+
+🔴 **Another agent may be editing the same memory concurrently.** Check whether
+lines you did not write have appeared since you last looked, and make targeted
+replacements rather than rewriting the file wholesale.
+
+Finally, rescue anything load-bearing that currently exists only in a scratchpad
+or a temp directory. Those are session-scoped and will be gone. If a draft,
+a measurement or a working document will be needed by the next session, move it
+into the repo (or into memory) and cite it from the checkpoint. **A checkpoint
+that says "the draft must be rewritten" when the draft still exists on disk has
+thrown away real work.**
+
+## Step 7: Branch, PR, and tell the user how to resume
 
 Docs-only change, so branch (`docs/` prefix), commit, and open a PR. Never commit
 to the default branch.
@@ -151,3 +236,9 @@ PR: <url>
   them from the checkpoint **with the relevant part restated inline**.
 - A checkpoint is not a changelog. Git already has one. This is about what to do
   next and what not to redo.
+
+## Maintenance
+
+This skill's instructions are not duplicated anywhere. If a copy is ever made
+(a cloud routine, a project-local override), record it here, or the copies drift
+silently and only one of them gets fixed.
