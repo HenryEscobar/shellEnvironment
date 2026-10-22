@@ -246,6 +246,7 @@ if [ "$DO_FILES" -eq 1 ]; then
     DOTFILES=(
         .shell_common .bashrc .zshrc .zprofile
         .tmux.conf .tmux.reset .screenrc .gitconfig
+        .config/git/ignore
     )
 
     log "scanning dotfiles..."

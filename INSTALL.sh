@@ -194,6 +194,7 @@ DOTFILES=(
     .tmux.reset
     .screenrc
     .gitconfig
+    .config/git/ignore
 )
 
 log "Copying dotfiles..."
@@ -263,6 +264,24 @@ if [ "$DO_PRIVATE" -eq 1 ]; then
             rel="$(local_rel "${src#"$PRIVATE_DIR/"}")"
             copy_one "$src" "$HOME/.${rel}"
         done < <(find "$PRIVATE_DIR/claude" -type f ! -name .DS_Store -print0)
+    fi
+fi
+
+# --- 3c. iTerm2 status helper ------------------------------------------------
+# iTerm2 3.7.6+ ships cc-status. The Claude hooks call it through
+# claude/hooks/iterm-status.sh, which exits quietly while it is missing.
+# Link it only when nothing is at the path yet, so a machine's own setup wins.
+ITERM_CC_STATUS="/Applications/iTerm.app/Contents/Resources/utilities/cc-status"
+CC_STATUS_LINK="$HOME/.config/iterm2/cc-status"
+if [ "$DO_CLAUDE" -eq 1 ]; then
+    if [ -e "$CC_STATUS_LINK" ] || [ -L "$CC_STATUS_LINK" ]; then
+        :   # already set up on this machine; leave it
+    elif [ -x "$ITERM_CC_STATUS" ]; then
+        log "link $CC_STATUS_LINK -> $ITERM_CC_STATUS"
+        run "mkdir -p '$(dirname "$CC_STATUS_LINK")'"
+        run "ln -s '$ITERM_CC_STATUS' '$CC_STATUS_LINK'"
+    else
+        warn "iTerm2 cc-status not found (needs iTerm2 3.7.6+); Claude's iTerm status hooks stay quiet until it is."
     fi
 fi
 

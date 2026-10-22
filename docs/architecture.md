@@ -359,8 +359,8 @@ or project-scope servers in a project's own `.mcp.json`.
    overwritten without explicit consent (or, non-interactively in `INSTALL.sh` only, a timestamped
    backup first).
 3. **`--dry-run` on both scripts** changes nothing.
-4. **The `DOTFILES=(...)` array is duplicated** in `INSTALL.sh` (~line 169) and `sync.sh`
-   (~line 223). Adding or removing a tracked dotfile means editing **both**, or the two directions
+4. **The `DOTFILES=(...)` array is duplicated** in `INSTALL.sh` (~line 188) and `sync.sh`
+   (~line 246). Adding or removing a tracked dotfile means editing **both**, or the two directions
    fall out of sync. `bin/` and `claude/` have no such array; they are walked with `find`.
 5. **Secrets never enter the repo.** They live in `*-local` files sourced last.
 6. **`sync.sh` cannot discover most new files.** New files outside `~/.claude/skills/` must be
