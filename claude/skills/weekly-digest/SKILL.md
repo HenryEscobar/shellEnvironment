@@ -83,6 +83,14 @@ Write these, in this order. Lead the whole document with anything that will brea
 - Follow the repo's writing conventions from `CLAUDE.md` — for this user that means absolute dates and no em dashes.
 - Length target: **a week fits on one screen** plus detail sections below it. If the top summary does not fit, you are enumerating instead of synthesizing.
 
+## Counting and citing
+
+The 2026-08-31 run produced a digest whose arithmetic was right and whose bookkeeping was not. Six errors, all of one family: a number or an anchor asserted without being read back. These three rules exist because of it.
+
+- **Every count names its unit, and one comparison never mixes two.** Unique files added (`git log --diff-filter=A --name-only | sort -u`) and path-events (a raw `--name-only` tally, which counts a file once per commit that touched it) are different measurements, and ranking one against the other produces a false ordering. The 2026-08-31 digest wrote "docs/qa is second (262 files) and docs/screenshots fourth (92 files) behind frontend/app (417)": 262 and 417 were path-events, 92 was unique-added, and under either unit alone the ordering it stated was wrong. Pick one unit per comparison and name it in the sentence.
+- **Re-read every line-number anchor at the end sha, at the moment of writing.** `grep -n` the phrase you are citing; do not recall where you saw it. The tracker files churn harder than anything else in the repo (`TODO.md` took 63 commits in the 2026-08-25 week alone), so an anchor read early in the run is stale before the document ships. On 2026-08-31 five anchors (`TODO.md:126-128`, `:113-116`, `:130-134`, `:134-136`, `PLAN.md:35`) all pointed at the wrong text while every claim attached to them was true. A confidently wrong anchor is worse than none: it spends the reader's trust and their time.
+- **Before opening the PR, re-read the document for any figure stated twice.** They must agree. The 2026-08-31 digest said one test file was deleted in section 3 while describing a second deletion, by name and line count, in section 1.
+
 ## Output
 
 Write to `docs/digests/<YYYY-MM-DD>.md` in the repo, on a branch, and open a PR. Never commit to the default branch.
@@ -100,11 +108,14 @@ Note that the audit shortcut above works in the scheduled run too, because `docs
 **Which routine, and its id, are recorded in `routines.local.md` next to this file.** That
 file is gitignored: it names a private repo and carries a trigger id, neither of which
 belongs in a public dotfiles repo. If it is missing on this machine, list the routines
-with `CronList` and re-create it.
+with `RemoteTrigger` (`action: "list"`) and re-create it. NOT `CronList`, which lists
+session-local cron jobs and never sees a cloud routine. Note also that `RemoteTrigger`
+list pagination stalls: on 2026-08-31 it returned the same 20 one-shot reminders on every
+page and never reached this routine, so `routines.local.md` is the only reliable pointer.
 
 |          |                                                                                                    |
 | -------- | -------------------------------------------------------------------------------------------------- |
-| Schedule | `13 12 * * 1` UTC = Mondays 8:13am America/New_York                                                |
+| Schedule | `7 7 * * 1` UTC = Mondays 3:07am America/New_York in EDT, 2:07am in EST (cron is UTC; the hour drifts across DST) |
 | Manage   | `https://claude.ai/code/routines/<trigger-id from routines.local.md>`                              |
 | Update   | `RemoteTrigger` with `action: "update"`, replacing `job_config.ccr.events[0].data.message.content` |
 

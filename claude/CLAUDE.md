@@ -114,6 +114,70 @@ The harness already lists every available skill with its description, so this se
 
 Two standing rules for this set: a skill that writes a dated artifact should never overwrite an older one, and if a skill's instructions are duplicated anywhere (a cloud routine, a project copy), the skill file must say where, or the copies drift silently.
 
+## Home Directory Paths
+
+**Always write `~/`, never a hard-coded `/Users/<name>/`.** I work across two boxes and
+the username differs between them (`hescobar` on the Mac, `henryescobar` elsewhere), so any
+absolute home path is wrong on one machine and silently does nothing. Applies to settings
+files, permission rules, scripts, docs, skills, and commit messages.
+
+- **Claude Code permission rules:** `~/path` is a documented anchor and expands per machine
+  (`Read(~/irad/azores.tools/**)`). Use it instead of the `//Users/...` absolute form.
+  `//path` is absolute-from-filesystem-root and `/path` anchors at the settings source, not
+  the filesystem root — neither travels between machines. Reference:
+  `~/docs/vendor/claude-code/08-permissions.md`.
+- **A symlink does not fix a wrong path.** Allow rules apply only when _both_ the symlink
+  path and its resolved target match, so symlinking one home dir at the other still prompts.
+  Fix the rule, don't add a link.
+- **In code, `~` is not expanded** by Python, Node, or JSON parsers. Use
+  `Path.home()` / `os.path.expanduser()` / `os.homedir()` there. `~` in a `Bash(...)`
+  permission rule matches the literal command text, so it only helps if the command is
+  actually spelled with `~`.
+
+## Worktrees: every agent works in its own
+
+🔴 **Take a `git worktree` BEFORE editing anything. Always. No exceptions, not
+even for a one-line or docs-only change.** Two sessions sharing one checkout has
+gone wrong repeatedly, and it fails in ways that look like nothing is wrong.
+
+```bash
+git worktree add .claude/worktrees/<task> -b <branch> main
+cd .claude/worktrees/<task>
+pnpm install    # or the project's install; a fresh worktree has no node_modules
+```
+
+**What goes wrong in a shared checkout**, all measured on 2026-09-08 in
+`relationship-crm`, in one afternoon:
+
+- **Your commit lands on someone else's branch.** A session ran
+  `git checkout -b`, and by the time it committed, the other session had moved
+  the checkout. The commit went into the wrong branch's history.
+- **Your uncommitted work is swept into their commit.** Their `git add` picked up
+  edits the other session had not committed yet, so a commit message describes
+  work it does not contain, and carries work it does not mention.
+- **A merge ships both, under one title.** GitHub's squash keeps only the PR's
+  message, so `git log` permanently attributes work to a PR whose description
+  never mentions it.
+- **A deploy can ship the wrong tree.** Scripts that upload the WORKING
+  DIRECTORY rather than the ref being promoted will ship whatever is on disk at
+  that instant.
+
+**Rules that follow:**
+
+- **The primary checkout belongs to the human and stays on `main`.** If you must
+  branch in it, return it to `main` in the same turn and say that you did.
+- **A shell prompt showing a branch is not evidence of the branch.** Run
+  `git rev-parse --abbrev-ref HEAD` immediately before any commit, not once at
+  the start of the session.
+- **Before `gh pr merge`, run `git log --oneline origin/main..HEAD`** and compare
+  it to the commits you actually wrote. A commit you did not author is a stop
+  sign, not something to merge.
+- **If your content already reached `main` inside someone else's PR, CLOSE your
+  PR** and say where the content went. Never force your version over work that
+  already landed; you will delete theirs.
+- **Never rewrite another agent's branch** to extract your commit. Hand it back.
+- Remove the worktree when its branch merges.
+
 ## Interaction Style
 
 - Analyze existing code/requirements first

@@ -35,6 +35,8 @@ fi
 command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
 command -v direnv >/dev/null 2>&1 && eval "$(direnv hook zsh)"
 [ -f "$HOME/.fzf.zsh" ] && . "$HOME/.fzf.zsh"
+[ -d "$HOME/.maestro/bin" ] && export PATH="$PATH:$HOME/.maestro/bin"
+[ -d /opt/homebrew/opt/libpq/bin ] && export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
 
 # --- Machine-local overrides (LAST so they win) --------------------------
 [ -f "$HOME/.zshrc-local" ] && . "$HOME/.zshrc-local"
