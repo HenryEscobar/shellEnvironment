@@ -102,7 +102,8 @@ that repo separately. Never move those files into this repo. Details: `docs/arch
 ## Editing rules specific to this repo
 
 - **The tracked-dotfile list is duplicated.** A `DOTFILES=(...)` array appears in both
-  `INSTALL.sh` (~line 169) and `sync.sh` (~line 223). Adding/removing a tracked dotfile means
+  `INSTALL.sh` (~line 188) and `sync.sh` (~line 246). It holds paths relative to `$HOME`, so it
+  can name files below it (`.config/git/ignore`). Adding/removing a tracked dotfile means
   editing **both**, or the two directions fall out of sync.
 - **Adding a claude config file**: drop it under `claude/<path>`, then `./INSTALL.sh`
   (claude/ is copied by default; `--no-claude` opts out, `--claude` is a kept no-op).
