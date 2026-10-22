@@ -8,6 +8,14 @@
 #   ./INSTALL.sh --host-os      # also run host-os/bootstrap.sh first
 #   ./INSTALL.sh --all          # host-os + dotfiles + bin + claude + MCP
 #   ./INSTALL.sh --dry-run      # print actions, change nothing
+#   ./INSTALL.sh --no-private   # skip the private checkout (see below)
+#
+# Private files:
+#   This repo is public. Per-project memories and gitignored skill data live in
+#   a separate private checkout ($SHELLENV_PRIVATE_DIR, default
+#   ../shellEnvironment-private), which sync.sh fills. Its claude/ dir is copied
+#   into ~/.claude/ with the same per-file prompts. Skipped with a warning when
+#   that checkout does not exist.
 #
 # Why claude/ is on by default:
 #   ~/.claude/ is the bulk of what this repo keeps in sync, and sync.sh has
@@ -39,18 +47,29 @@ DRY_RUN=0
 DO_CLAUDE=1
 DO_HOST_OS=0
 DO_MCP=0
+DO_PRIVATE=1
 # Nothing to copy if this checkout has no claude/ dir (mirrors sync.sh).
 [ -d "$REPO_DIR/claude" ] || DO_CLAUDE=0
+PRIVATE_DIR="${SHELLENV_PRIVATE_DIR:-$(dirname "$REPO_DIR")/shellEnvironment-private}"
+# Which private repo to clone there. Defaults to the same GitHub owner as this
+# checkout's origin, so a fork points at the forker's own private repo.
+PRIVATE_REPO="${SHELLENV_PRIVATE_REPO:-}"
+if [ -z "$PRIVATE_REPO" ]; then
+    origin_owner="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null \
+        | sed -nE 's#.*github\.com[:/]([^/]+)/.*#\1#p')"
+    PRIVATE_REPO="${origin_owner:-<your-github-user>}/shellEnvironment-private"
+fi
 
 for arg in "$@"; do
     case "$arg" in
         --dry-run)   DRY_RUN=1 ;;
         --claude)    DO_CLAUDE=1 ;;   # no-op: on by default. Kept for muscle memory.
-        --no-claude) DO_CLAUDE=0 ;;
+        --no-claude) DO_CLAUDE=0; DO_PRIVATE=0 ;;
+        --no-private) DO_PRIVATE=0 ;;
         --mcp)       DO_MCP=1 ;;
         --host-os)   DO_HOST_OS=1 ;;
         --all)       DO_CLAUDE=1; DO_HOST_OS=1; DO_MCP=1 ;;
-        -h|--help)   sed -n '2,31p' "$0"; exit 0 ;;
+        -h|--help)   sed -n '2,39p' "$0"; exit 0 ;;
         *)           echo "unknown flag: $arg" >&2; exit 2 ;;
     esac
 done
@@ -213,6 +232,38 @@ if [ "$DO_CLAUDE" -eq 1 ] && [ -d "$REPO_DIR/claude" ]; then
         esac
         copy_one "$src" "$HOME/.claude/$rel"
     done < <(find "$REPO_DIR/claude" -type f -print0)
+fi
+
+# --- 3b. Private claude files (memories, local skill data) -------------------
+# Memories are filed under ~/.claude/projects/<path-of-project>/ with every
+# non-alphanumeric character turned into "-". sync.sh stores the home prefix
+# as the literal HOME (claude/projects/HOME-irad-x/); expand it to this
+# machine's $HOME so a different username still lines up. The project paths
+# under $HOME (~/irad/x) must still match. sync.sh holds the forward mapping.
+HOME_KEY="$(printf '%s' "$HOME" | sed 's#[^A-Za-z0-9]#-#g')"
+
+# local_rel <claude/...>: claude/projects/HOME-irad-x/f -> claude/projects/-Users-me-irad-x/f
+local_rel() {
+    local rel="$1"
+    case "$rel" in
+        claude/projects/HOME/*|claude/projects/HOME-*)
+            printf 'claude/projects/%s%s' "$HOME_KEY" "${rel#claude/projects/HOME}" ;;
+        *) printf '%s' "$rel" ;;
+    esac
+}
+
+if [ "$DO_PRIVATE" -eq 1 ]; then
+    if [ ! -d "$PRIVATE_DIR/claude" ]; then
+        warn "no private checkout at $PRIVATE_DIR; skipping memories and local skill data."
+        warn "  clone it: gh repo clone '$PRIVATE_REPO' '$PRIVATE_DIR'"
+        warn "  (or point elsewhere with SHELLENV_PRIVATE_DIR / SHELLENV_PRIVATE_REPO, e.g. in ~/.zshrc-local)"
+    else
+        log "Copying private claude/* from $PRIVATE_DIR into ~/.claude/..."
+        while IFS= read -r -d '' src; do
+            rel="$(local_rel "${src#"$PRIVATE_DIR/"}")"
+            copy_one "$src" "$HOME/.${rel}"
+        done < <(find "$PRIVATE_DIR/claude" -type f ! -name .DS_Store -print0)
+    fi
 fi
 
 # --- 4. MCP servers (opt-in: --mcp or --all) ---------------------------------

@@ -258,6 +258,36 @@ Everything else remains blind. New files under `~/bin`, `~/.claude/hooks/`, `age
 `rules/`, and any new dotfile must be copied into the repo **by hand once**. Only then does
 `sync.sh` track them.
 
+### The private pass (added 2026-10-22)
+
+This repo is public, but two kinds of `~/.claude/` content are worth carrying between machines and
+must never be published: per-project memories (`~/.claude/projects/*/memory/`, which hold product
+internals, other people's identifiers, and local dev DB passwords) and the gitignored skill data
+(`skills/weekly-digest/routines.local.md`, `skills/silent-change-audit/baselines/`).
+
+They go to a **separate private checkout** instead, `$SHELLENV_PRIVATE_DIR` (default
+`../shellEnvironment-private`, cloned from `$SHELLENV_PRIVATE_REPO`, default
+`<origin owner>/shellEnvironment-private` so a fork points at the forker's own repo). Its
+`claude/` dir mirrors `~/.claude/` path for path.
+
+Unlike passes 1 and 2 this pass is **home-driven**, because new memories appear every session and a
+repo-driven walk would never see them. A file with no twin in the private checkout is copied without
+a prompt (nothing is overwritten); a differing file goes through `handle_one`. The list of non-memory
+paths is `PRIVATE_PATHS` in `sync.sh`; it must stay in step with the `.gitignore` entries that keep
+those same paths out of pass 2. `INSTALL.sh` walks the private `claude/` dir with `copy_one`.
+Both scripts warn and skip when the checkout is missing; `--no-private` disables it, and
+`sync.sh --private` runs only this pass.
+
+A memory deleted at `$HOME` is not deleted in the private repo (never destroy data), so the next
+`INSTALL.sh` on another machine brings it back. Delete it from the private repo by hand.
+
+Memories are filed under the project's absolute path with every non-alphanumeric character turned
+into `-` (`-Users-<user>-irad-<project>`), which embeds the username. `sync.sh` (`portable_rel`)
+stores the `$HOME` prefix as the literal `HOME` (`claude/projects/HOME-irad-<project>/`) and
+`INSTALL.sh` (`local_rel`) expands it to the receiving machine's `$HOME`, so a different username
+still lines up. The layout under `$HOME` (`~/irad/<project>`) must still match. The two functions
+are inverses kept in separate scripts; change both together.
+
 ### MCP drift mode (`--mcp`)
 
 Compares the server names from `claude mcp list` against the `add_user_mcp <name>` lines in

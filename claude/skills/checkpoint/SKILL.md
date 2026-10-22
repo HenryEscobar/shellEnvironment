@@ -1,7 +1,6 @@
 ---
 name: checkpoint
 description: Write a self-contained, execute-able checkpoint plan capturing the current state of work, so a fresh session can pick it up with `read and execute <file>` after a /clear.
-disable-model-invocation: true
 argument-hint: "<optional short name for the checkpoint, e.g. 'after the sync refactor'>"
 ---
 
