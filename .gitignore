@@ -64,3 +64,6 @@ claude/skills/silent-change-audit/baselines/
 # weekly-digest's scheduled-routine identifiers (names a private repo, holds a trigger
 # id). SKILL.md points at this file; the file itself stays local.
 claude/skills/weekly-digest/routines.local.md
+
+# INSTALL.sh run logs (hold diffs of home files, including private memories)
+logs/

@@ -37,6 +37,9 @@
 #     overwritten without your say-so. Non-interactive runs (no tty) fall back to
 #     backup (<name>-YYYYMMDD-HHMMSS) + overwrite so they never hang.
 #   - Use sync.sh to push changes the other way (home -> repo).
+#   - Every run (dry runs too) is logged to logs/install-YYYYMMDD-HHMM.log in
+#     this repo, gitignored, colour stripped. Prompts and the merge editor talk
+#     to /dev/tty, so logging never gets in the way of answering them.
 
 set -euo pipefail
 
@@ -60,6 +63,7 @@ if [ -z "$PRIVATE_REPO" ]; then
     PRIVATE_REPO="${origin_owner:-<your-github-user>}/shellEnvironment-private"
 fi
 
+ORIG_ARGS="$*"
 for arg in "$@"; do
     case "$arg" in
         --dry-run)   DRY_RUN=1 ;;
@@ -69,10 +73,19 @@ for arg in "$@"; do
         --mcp)       DO_MCP=1 ;;
         --host-os)   DO_HOST_OS=1 ;;
         --all)       DO_CLAUDE=1; DO_HOST_OS=1; DO_MCP=1 ;;
-        -h|--help)   sed -n '2,39p' "$0"; exit 0 ;;
+        -h|--help)   sed -n '2,42p' "$0"; exit 0 ;;
         *)           echo "unknown flag: $arg" >&2; exit 2 ;;
     esac
 done
+
+# Tee everything from here on into a timestamped log. Started after flag
+# parsing so --help and a bad flag leave no log behind. Two runs in the same
+# minute append to one file; the header line separates them.
+LOG_DIR="$REPO_DIR/logs"
+LOG_FILE="$LOG_DIR/install-$(date +%Y%m%d-%H%M).log"
+mkdir -p "$LOG_DIR"
+exec > >(tee >(perl -pe 'BEGIN { $| = 1 } s/\e\[[0-9;]*[A-Za-z]//g' >>"$LOG_FILE")) 2>&1
+echo "=== INSTALL.sh ${ORIG_ARGS:-(no flags)} | $(date '+%Y-%m-%d %H:%M:%S') | $(hostname -s) | $(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo no-git)"
 
 # --mcp without claude/ files is legal (re-register servers only), but --mcp
 # after --no-claude is worth a word so it doesn't look like a silent skip.
@@ -135,7 +148,7 @@ prompt_diff() {
             m|M) "$MERGE_TOOL" "$dest" "$src" </dev/tty >/dev/tty 2>&1 || true
                  if cmp -s "$src" "$dest"; then log "merged $dest (now identical)"; return 0
                  else log "still differs after merge — re-prompting"; fi ;;
-            s|S) show_diff "$dest" "$src" | ${PAGER:-less -R} ;;
+            s|S) show_diff "$dest" "$src" | ${PAGER:-less -R} >/dev/tty ;;
             q|Q) warn "quit — remaining files left as-is"; exit 0 ;;
             *)   echo "  pick o / k / m / s / q" ;;
         esac
@@ -285,7 +298,7 @@ if [ "$DO_MCP" -eq 1 ]; then
     fi
 fi
 
-log "Done."
+log "Done. Log: $LOG_FILE"
 if [ "$DRY_RUN" -eq 1 ]; then
     warn "Dry run — no changes made. Re-run without --dry-run to apply."
 fi
