@@ -56,6 +56,14 @@ no tty fall back to timestamped backup + overwrite); `sync.sh` does the same tow
 (`[o]verwrite repo / [k]eep / [m]erge / [s]how / [q]uit`). Nothing is overwritten without an
 explicit `o` or a save during `m`.
 
+**This repo is public, so a private sibling repo carries what it can't.** Per-project memories
+(`~/.claude/projects/*/memory/`) and gitignored skill data go to a separate private checkout,
+`$SHELLENV_PRIVATE_DIR` (default `../shellEnvironment-private`). `sync.sh` fills it (home-driven:
+new files are copied without a prompt, differing ones prompt as usual) and `INSTALL.sh` copies it
+out. Project folders are stored as `HOME-irad-<project>` and expanded to the local `$HOME`, so a
+different username works. Both skip with a warning if the checkout is missing; `--no-private` opts out. Commit and push
+that repo separately. Never move those files into this repo. Details: `docs/architecture.md` §5.
+
 ## Common commands
 
 ```sh

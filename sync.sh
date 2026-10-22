@@ -8,6 +8,8 @@
 #   ./sync.sh --no-claude    # skip claude/
 #   ./sync.sh --no-adopt     # skip the new-skill pass (see below)
 #   ./sync.sh --mcp          # ONLY check MCP-server drift (no file diffs)
+#   ./sync.sh --no-private   # skip the private pass (see below)
+#   ./sync.sh --private      # ONLY run the private pass
 #
 # For each file the repo tracks, compare with the matching file in $HOME:
 #   - identical                  -> silently skip
@@ -29,6 +31,14 @@
 #       [q]uit
 # Symlinked skills (owned by another repo) and gitignored paths are skipped.
 #
+# This repo is PUBLIC, so some files worth carrying between machines cannot live
+# here: per-project memories (~/.claude/projects/*/memory/) and gitignored skill
+# data. A private pass copies those into a separate private checkout
+# ($SHELLENV_PRIVATE_DIR, default ../shellEnvironment-private). That pass is
+# home-driven, so new files are found: new ones are copied without a prompt
+# (nothing is overwritten), differing ones get the same o/k/m/s/q prompt.
+# Skipped with a warning when the private checkout does not exist.
+#
 # Nothing is overwritten without your explicit "o", "m" + save, or "a".
 
 set -euo pipefail
@@ -40,7 +50,17 @@ DO_CLAUDE=1
 DO_FILES=1
 DO_MCP=0
 DO_ADOPT=1
+DO_PRIVATE=1
 [ -d "$REPO_DIR/claude" ] || DO_CLAUDE=0
+PRIVATE_DIR="${SHELLENV_PRIVATE_DIR:-$(dirname "$REPO_DIR")/shellEnvironment-private}"
+# Which private repo to clone there. Defaults to the same GitHub owner as this
+# checkout's origin, so a fork points at the forker's own private repo.
+PRIVATE_REPO="${SHELLENV_PRIVATE_REPO:-}"
+if [ -z "$PRIVATE_REPO" ]; then
+    origin_owner="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null \
+        | sed -nE 's#.*github\.com[:/]([^/]+)/.*#\1#p')"
+    PRIVATE_REPO="${origin_owner:-<your-github-user>}/shellEnvironment-private"
+fi
 
 for arg in "$@"; do
     case "$arg" in
@@ -48,8 +68,10 @@ for arg in "$@"; do
         --all)        DO_CLAUDE=1 ;;
         --no-claude)  DO_CLAUDE=0 ;;
         --no-adopt)   DO_ADOPT=0 ;;
-        --mcp)        DO_MCP=1; DO_FILES=0 ;;
-        -h|--help)    sed -n '2,32p' "$0"; exit 0 ;;
+        --mcp)        DO_MCP=1; DO_FILES=0; DO_PRIVATE=0 ;;
+        --no-private) DO_PRIVATE=0 ;;
+        --private)    DO_PRIVATE=1; DO_FILES=0 ;;
+        -h|--help)    sed -n '2,42p' "$0"; exit 0 ;;
         *)            echo "unknown flag: $arg" >&2; exit 2 ;;
     esac
 done
@@ -80,6 +102,7 @@ show_diff() {
 handle_one() {
     local home="$1" repo="$2"
     local rel="${repo#"$REPO_DIR/"}"
+    rel="${rel#"$PRIVATE_DIR/"}"
 
     if [ ! -e "$home" ]; then
         warn "MISSING at home: $home  (repo has $rel; skipping)"
@@ -268,6 +291,75 @@ if [ "$DO_FILES" -eq 1 ]; then
         if [ -n "$symlinked" ]; then
             log "skipped symlinked skills (owned by other repos):$symlinked"
         fi
+    fi
+fi
+
+# --- Private pass -----------------------------------------------------------
+# Home paths (relative to ~/.claude/) that go to the private checkout, never here.
+# Directories are walked recursively. Keep in step with the matching
+# .gitignore entries, which stop the public walks from picking these up.
+PRIVATE_PATHS=(
+    skills/weekly-digest/routines.local.md
+    skills/silent-change-audit/baselines
+)
+
+# Project dirs are named after the project's absolute path with every
+# non-alphanumeric character turned into "-", so they embed the username
+# (-Users-me-irad-x). The private repo stores the home prefix as the literal
+# HOME, and INSTALL.sh expands it, so memories survive a different username.
+# INSTALL.sh holds the reverse mapping; change both together.
+HOME_KEY="$(printf '%s' "$HOME" | sed 's#[^A-Za-z0-9]#-#g')"
+
+# portable_rel <claude/...>: claude/projects/-Users-me-irad-x/f -> claude/projects/HOME-irad-x/f
+portable_rel() {
+    local rel="$1" tail proj
+    case "$rel" in
+        claude/projects/*/*) ;;
+        *) printf '%s' "$rel"; return 0 ;;
+    esac
+    tail="${rel#claude/projects/}"
+    proj="${tail%%/*}"
+    if [ "$proj" = "$HOME_KEY" ] || [ "${proj#"$HOME_KEY"-}" != "$proj" ]; then
+        proj="HOME${proj#"$HOME_KEY"}"
+    fi
+    printf 'claude/projects/%s/%s' "$proj" "${tail#*/}"
+}
+
+# private_home_files: NUL-separated list of every home file the private pass owns.
+private_home_files() {
+    local p
+    for p in "$HOME"/.claude/projects/*/memory; do
+        [ -d "$p" ] && find "$p" -type f ! -name .DS_Store -print0
+    done
+    for p in "${PRIVATE_PATHS[@]}"; do
+        [ -e "$HOME/.claude/$p" ] && find "$HOME/.claude/$p" -type f ! -name .DS_Store -print0
+    done
+    return 0
+}
+
+if [ "$DO_PRIVATE" -eq 1 ]; then
+    if [ ! -d "$PRIVATE_DIR/.git" ]; then
+        warn "no private checkout at $PRIVATE_DIR; skipping memories and local skill data."
+        warn "  clone it: gh repo clone '$PRIVATE_REPO' '$PRIVATE_DIR'"
+        warn "  (or point elsewhere with SHELLENV_PRIVATE_DIR / SHELLENV_PRIVATE_REPO, e.g. in ~/.zshrc-local)"
+    else
+        log "scanning private files (memories, local skill data) -> $PRIVATE_DIR..."
+        added=0
+        while IFS= read -r -d '' home_file; do
+            rel="$(portable_rel "claude/${home_file#"$HOME/.claude/"}")"
+            dest="$PRIVATE_DIR/$rel"
+            if [ -e "$dest" ]; then
+                handle_one "$home_file" "$dest"
+            elif [ "$DRY_RUN" -eq 1 ]; then
+                echo "  new: $rel"
+            else
+                mkdir -p "$(dirname "$dest")"
+                cp -p "$home_file" "$dest"
+                added=$((added + 1))
+            fi
+        done < <(private_home_files)
+        [ "$added" -gt 0 ] && log "copied $added new private file(s)"
+        [ "$DRY_RUN" -eq 1 ] || log "Review with: git -C '$PRIVATE_DIR' status"
     fi
 fi
 
