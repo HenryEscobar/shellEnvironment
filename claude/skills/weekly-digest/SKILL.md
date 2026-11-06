@@ -93,7 +93,7 @@ The 2026-08-31 run produced a digest whose arithmetic was right and whose bookke
 
 ## Output
 
-Write to `docs/digests/<YYYY-MM-DD>.md` in the repo, on a branch, and open a PR. Never commit to the default branch.
+Write to docs/digests/<YYYY-MM-DD>.md. Create a branch (docs/digest-<date>), commit, push, and open a PR titled `docs: weekly digest for <start> to <end>` carrying the label `weekly-digest`. Create the label first if the repo lacks it, so a missing label never fails the run: `gh label create weekly-digest --color 0E8A16 --description "Automated weekly digest written by the weekly-digest skill" 2>/dev/null || true`, then pass `--label weekly-digest` to `gh pr create`. NEVER commit to the default branch.
 
 If running headless (a scheduled agent, no interactive terminal), you cannot ask a clarifying question — make the call, and flag the assumption in the digest rather than blocking on it.
 
@@ -104,6 +104,8 @@ A cloud scheduled agent gets a checkout of the target repo and **cannot see `~/.
 Note that the audit shortcut above works in the scheduled run too, because `docs/audits/` is in the checkout. Nothing this skill reads lives outside the repo.
 
 **If you edit the five sections or the rules here, update the routine too**, or the Monday run silently keeps using the old version:
+
+**One deliberate difference, 2026-10-27:** the Output line here ends "NEVER commit to the default branch", and the routine's ends "NEVER commit to main". This skill runs in other repos; the routine only runs on relationship-crm, whose default branch is `main`. Do not "fix" either one to match the other. Both add the `weekly-digest` label to the PR.
 
 **Which routine, and its id, are recorded in `routines.local.md` next to this file.** That
 file is gitignored: it names a private repo and carries a trigger id, neither of which

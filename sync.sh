@@ -10,16 +10,20 @@
 #   ./sync.sh --mcp          # ONLY check MCP-server drift (no file diffs)
 #   ./sync.sh --no-private   # skip the private pass (see below)
 #   ./sync.sh --private      # ONLY run the private pass
+#   ./sync.sh --no-brew      # skip the Homebrew pass (see below)
+#   ./sync.sh --brew         # ONLY run the Homebrew pass
 #
 # For each file the repo tracks, compare with the matching file in $HOME:
 #   - identical                  -> silently skip
 #   - missing at home            -> warn, skip (repo has something home doesn't)
-#   - differs                    -> show diff, prompt:
-#       [o]verwrite repo with home version
-#       [k]eep repo unchanged
-#       [m]erge in $EDITOR (vimdiff by default), then re-prompt
-#       [s]how diff again
-#       [q]uit (stop processing further files)
+#   - differs                    -> decided automatically where that is safe,
+#     using the file's git history as the merge base:
+#       home is an older committed version  -> leave repo alone
+#       home only adds lines                -> take home
+#       both changed, in different places   -> 3-way merge into the repo
+#     and only a real conflict (same lines changed on both sides) prompts:
+#       [o]verwrite repo  [k]eep repo  [m]erge in $EDITOR  [s]how diff  [q]uit
+#   A summary of every decision prints at the end; `git diff` reviews it.
 #
 # That walk is repo-driven: it finds files under claude/ in THIS repo and looks
 # for their twins at home. A skill created only at $HOME is therefore invisible
@@ -36,10 +40,15 @@
 # data. A private pass copies those into a separate private checkout
 # ($SHELLENV_PRIVATE_DIR, default ../shellEnvironment-private). That pass is
 # home-driven, so new files are found: new ones are copied without a prompt
-# (nothing is overwritten), differing ones get the same o/k/m/s/q prompt.
+# (nothing is overwritten), differing ones get the same automatic handling.
 # Skipped with a warning when the private checkout does not exist.
 #
-# Nothing is overwritten without your explicit "o", "m" + save, or "a".
+# A Homebrew pass lists what you installed (brew leaves --installed-on-request,
+# casks) that host-os/Brewfile does not name, and offers to add it. Anything you
+# decline is written as a commented line, so it is never offered again.
+#
+# Automatic decisions keep both sides' changes; the repo is in git, so
+# `git restore` undoes any of them. Nothing at $HOME is ever written.
 
 set -euo pipefail
 
@@ -51,6 +60,7 @@ DO_FILES=1
 DO_MCP=0
 DO_ADOPT=1
 DO_PRIVATE=1
+DO_BREW=1
 [ -d "$REPO_DIR/claude" ] || DO_CLAUDE=0
 PRIVATE_DIR="${SHELLENV_PRIVATE_DIR:-$(dirname "$REPO_DIR")/shellEnvironment-private}"
 # Which private repo to clone there. Defaults to the same GitHub owner as this
@@ -68,10 +78,12 @@ for arg in "$@"; do
         --all)        DO_CLAUDE=1 ;;
         --no-claude)  DO_CLAUDE=0 ;;
         --no-adopt)   DO_ADOPT=0 ;;
-        --mcp)        DO_MCP=1; DO_FILES=0; DO_PRIVATE=0 ;;
+        --mcp)        DO_MCP=1; DO_FILES=0; DO_PRIVATE=0; DO_BREW=0 ;;
         --no-private) DO_PRIVATE=0 ;;
-        --private)    DO_PRIVATE=1; DO_FILES=0 ;;
-        -h|--help)    sed -n '2,42p' "$0"; exit 0 ;;
+        --private)    DO_PRIVATE=1; DO_FILES=0; DO_BREW=0 ;;
+        --no-brew)    DO_BREW=0 ;;
+        --brew)       DO_BREW=1; DO_FILES=0; DO_PRIVATE=0 ;;
+        -h|--help)    sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
         *)            echo "unknown flag: $arg" >&2; exit 2 ;;
     esac
 done
@@ -98,7 +110,72 @@ show_diff() {
     fi
 }
 
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+SUM_TAKEN=(); SUM_MERGED=(); SUM_STALE=(); SUM_ASKED=()
+
+# find_base <repo-file> <home-file> <out>
+#
+# Picks a merge base from the repo file's own git history (last 30 commits that
+# touched it): the committed version closest to the home file. If the home file
+# IS one of those versions, sets BASE_IS_HOME=1, meaning home simply has not had
+# the newer repo version installed yet. Works for both this repo and the
+# private checkout, since it asks whichever repo the file lives in.
+find_base() {
+    local repo="$1" home="$2" out="$3"
+    local dir path sha n best_n=999999 cand="$TMP_DIR/cand"
+    BASE_IS_HOME=0
+    : >"$out"
+    dir="$(dirname "$repo")"
+    path="$(git -C "$dir" ls-files --full-name -- "$(basename "$repo")" 2>/dev/null)"
+    [ -n "$path" ] || return 1
+    while read -r sha; do
+        git -C "$dir" show "$sha:$path" >"$cand" 2>/dev/null || continue
+        if cmp -s "$cand" "$home"; then
+            cp "$cand" "$out"; BASE_IS_HOME=1; return 0
+        fi
+        n=$(diff "$cand" "$home" | grep -c '^[<>]' || true)
+        # -le, not -lt: log runs newest first, so ties go to the OLDER version.
+        # If both sides edited the same line, home is equally far from the old
+        # and new versions; picking the new one as base would make the repo's
+        # edit vanish in a "clean" merge. The older base surfaces a conflict.
+        if [ "$n" -le "$best_n" ]; then best_n=$n; cp "$cand" "$out"; fi
+    done < <(git -C "$dir" log -n 30 --format=%H -- ":(top)$path")
+    [ -s "$out" ]
+}
+
+# print_summary: one block at the end instead of a diff per file.
+print_summary() {
+    local f
+    [ "$DRY_RUN" -eq 1 ] && return 0
+    if [ "${#SUM_TAKEN[@]}" -gt 0 ]; then
+        log "took home version (home only added lines): ${#SUM_TAKEN[@]}"
+        for f in "${SUM_TAKEN[@]}"; do echo "      $f"; done
+    fi
+    if [ "${#SUM_MERGED[@]}" -gt 0 ]; then
+        log "merged both sides automatically (no overlapping edits): ${#SUM_MERGED[@]}"
+        for f in "${SUM_MERGED[@]}"; do echo "      $f"; done
+        warn "  home lacks the repo side of those; ./INSTALL.sh brings the merged result home"
+    fi
+    if [ "${#SUM_STALE[@]}" -gt 0 ]; then
+        log "repo already newer than home, left alone: ${#SUM_STALE[@]}"
+        for f in "${SUM_STALE[@]}"; do echo "      $f"; done
+    fi
+    if [ "${#SUM_ASKED[@]}" -gt 0 ]; then
+        log "real conflicts you were asked about: ${#SUM_ASKED[@]}"
+    fi
+    return 0
+}
+
 # handle_one <home> <repo>
+#
+# Decides by itself where it safely can, and only asks on a real conflict:
+#   stale     home equals an older committed version -> leave repo alone
+#   additions home only adds lines                   -> take home
+#   merged    both changed, different places         -> 3-way merge into repo
+#   conflict  both changed the same lines            -> o/k/m/s/q prompt
+# Every automatic outcome keeps both sides' changes, and the repo is in git, so
+# `git diff` / `git restore` review or undo any of it.
 handle_one() {
     local home="$1" repo="$2"
     local rel="${repo#"$REPO_DIR/"}"
@@ -116,19 +193,46 @@ handle_one() {
         return 0  # identical
     fi
 
+    local adds dels verdict
+    adds=$(diff "$repo" "$home" | grep -c '^>' || true)
+    dels=$(diff "$repo" "$home" | grep -c '^<' || true)
+    : >"$TMP_DIR/merged"
+    if find_base "$repo" "$home" "$TMP_DIR/base" && [ "$BASE_IS_HOME" -eq 1 ]; then
+        verdict=stale        # home is an older committed version; repo is newer
+    elif [ "$dels" -eq 0 ]; then
+        verdict=additions    # home only adds lines; taking it loses nothing
+    elif [ -s "$TMP_DIR/base" ] && cp "$home" "$TMP_DIR/merged" \
+         && git merge-file -q "$TMP_DIR/merged" "$TMP_DIR/base" "$repo" 2>/dev/null; then
+        verdict=merged       # both changed, in different places
+    else
+        verdict=conflict
+    fi
+
     if [ "$DRY_RUN" -eq 1 ]; then
-        echo "  diverges: $rel"
+        echo "  $verdict: $rel (home +$adds -$dels vs repo)"
         return 0
     fi
 
+    case "$verdict" in
+        stale)
+            SUM_STALE+=("$rel"); return 0 ;;
+        additions)
+            cp -p "$home" "$repo"; SUM_TAKEN+=("$rel"); return 0 ;;
+        merged)
+            if cmp -s "$TMP_DIR/merged" "$repo"; then
+                SUM_STALE+=("$rel")     # repo already holds home's changes
+            else
+                cat "$TMP_DIR/merged" >"$repo"
+                SUM_MERGED+=("$rel")
+            fi
+            return 0 ;;
+    esac
+
+    SUM_ASKED+=("$rel")
     while true; do
         echo
-        log "$rel diverges. home: $home"
-        show_diff "$home" "$repo" | sed -n '1,80p'
-        local n
-        n=$(show_diff "$home" "$repo" | wc -l | tr -d ' ')
-        if [ "$n" -gt 80 ]; then echo "(diff truncated — $n lines total; pick [s] to see it again or [m] to view in editor)"; fi
-        printf '\n  [o]verwrite repo  [k]eep repo  [m]erge in %s  [s]how full diff  [q]uit  > ' "$MERGE_TOOL"
+        log "$rel: both sides changed the same lines (home +$adds -$dels vs repo)"
+        printf '  [o]verwrite repo  [k]eep repo  [m]erge in %s  [s]how diff  [q]uit  > ' "$MERGE_TOOL"
         read -r choice </dev/tty
         case "$choice" in
             o|O)
@@ -364,6 +468,70 @@ if [ "$DO_PRIVATE" -eq 1 ]; then
     fi
 fi
 
+# --- Homebrew pass ----------------------------------------------------------
+# host-os/Brewfile has no twin at $HOME, so the file walk never sees a new
+# `brew install`. This compares what you asked brew for against the Brewfile.
+# Any name in the Brewfile counts as known, commented out or not: a commented
+# line is how "installed here, but not for every machine" is recorded.
+BREWFILE="$REPO_DIR/host-os/Brewfile"
+
+brew_append() {   # brew_append <kind> <name> <commented:0|1>
+    if ! grep -q '^# --- Added by sync.sh' "$BREWFILE"; then
+        printf '\n# --- Added by sync.sh (move into a section above when convenient) -----------\n' >>"$BREWFILE"
+    fi
+    if [ "$3" -eq 1 ]; then
+        printf '# %s "%s"   # kept out by sync.sh %s\n' "$1" "$2" "$(date +%Y-%m-%d)" >>"$BREWFILE"
+    else
+        printf '%s "%s"\n' "$1" "$2" >>"$BREWFILE"
+    fi
+}
+
+if [ "$DO_BREW" -eq 1 ]; then
+    if ! command -v brew >/dev/null 2>&1; then
+        warn "brew not on PATH; skipping Homebrew pass."
+    elif [ ! -f "$BREWFILE" ]; then
+        warn "no host-os/Brewfile; skipping Homebrew pass."
+    else
+        log "checking Homebrew installs against host-os/Brewfile..."
+        known=$(sed -nE 's/^[[:space:]#]*(brew|cask)[[:space:]]+"([^"]+)".*/\1 \2/p' "$BREWFILE" | sort -u)
+        if command -v jq >/dev/null 2>&1; then
+            casks=$(brew info --cask --installed --json=v2 2>/dev/null | jq -r '.casks[].full_token')
+        else
+            casks=$(brew list --cask -1)
+        fi
+        installed=$( { brew leaves --installed-on-request | sed 's/^/brew /'
+                       printf '%s\n' "$casks" | grep . | sed 's/^/cask /'; } | sort -u)
+        missing=$(comm -23 <(printf '%s\n' "$installed") <(printf '%s\n' "$known"))
+
+        if [ -z "$missing" ]; then
+            log "Brewfile covers everything installed on request"
+        elif [ "$DRY_RUN" -eq 1 ]; then
+            printf '%s\n' "$missing" | sed 's/^/  not in Brewfile: /'
+        else
+            echo
+            log "installed here but not in host-os/Brewfile:"
+            printf '%s\n' "$missing" | sed 's/^/      /'
+            printf '\n  [a]dd all  [p]ick one by one  [k]eep all out (never asked again)  [s]kip for now  > '
+            read -r choice </dev/tty
+            case "$choice" in
+                a|A) while read -r kind name; do brew_append "$kind" "$name" 0; done <<<"$missing"
+                     log "added to Brewfile" ;;
+                k|K) while read -r kind name; do brew_append "$kind" "$name" 1; done <<<"$missing"
+                     log "recorded as kept out" ;;
+                p|P) while read -r kind name; do
+                         printf '  %s %s: [a]dd  [k]eep out  [s]kip  > ' "$kind" "$name"
+                         read -r c </dev/tty
+                         case "$c" in
+                             a|A) brew_append "$kind" "$name" 0 ;;
+                             k|K) brew_append "$kind" "$name" 1 ;;
+                         esac
+                     done <<<"$missing" ;;
+                *)   log "Brewfile left unchanged" ;;
+            esac
+        fi
+    fi
+fi
+
 # --- MCP drift mode ---------------------------------------------------------
 if [ "$DO_MCP" -eq 1 ]; then
     log "checking MCP-server drift..."
@@ -411,6 +579,7 @@ if [ "$DO_MCP" -eq 1 ]; then
     fi
 fi
 
+print_summary
 log "Done."
 if [ "$DRY_RUN" -eq 1 ]; then
     warn "Dry run — no changes made. Re-run without --dry-run to act on diffs."

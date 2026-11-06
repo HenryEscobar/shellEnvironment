@@ -1,6 +1,7 @@
-# Brewfile — installed via `brew bundle --file=host-os/Brewfile`.
-# Lean defaults; uncomment what you actually want on a given machine.
-# Keep this in sync with what you reach for daily — drift makes it noise.
+# Brewfile: installed via `brew bundle --file=host-os/Brewfile`.
+# Uncommented = wanted on every machine. Commented = known, but install by hand
+# where needed. ./sync.sh offers anything you `brew install` that is not named
+# here (commented or not), and records a "keep out" answer as a commented line.
 
 # --- Core CLI ----------------------------------------------------------------
 brew "git"
@@ -11,11 +12,15 @@ brew "vim"
 brew "neovim"
 brew "jq"
 brew "wget"
+brew "curl"                # newer than the macOS one
+brew "aria2"               # parallel downloader
 brew "tree"
 brew "htop"
 brew "watch"
-brew "coreutils"           # gdate, gsed, gls — call as g<name>
+brew "coreutils"           # gdate, gsed, gls: call as g<name>
 brew "shellcheck"
+brew "gitleaks"            # secret scanner
+brew "mas"                 # Mac App Store CLI
 
 # --- Modern unix replacements ------------------------------------------------
 brew "ripgrep"             # rg
@@ -26,23 +31,40 @@ brew "fzf"                 # fuzzy finder
 brew "zoxide"              # smarter cd
 brew "direnv"              # per-dir env
 
-# --- Languages (uncomment what you need) ------------------------------------
+# --- Languages ---------------------------------------------------------------
 brew "node"                # needed by host-os/npm-globals.sh and `npx`-based MCPs
+brew "node@22"
+brew "pnpm"
+brew "python@3.12"
+brew "openjdk@17"
 # brew "go"
-# brew "python@3.12"
-# brew "openjdk@21"
 # brew "rustup"
 
-# --- Cloud / infra (uncomment what you need) --------------------------------
+# --- Mobile (Expo / iOS / Android) ------------------------------------------
+brew "cocoapods"
+brew "libimobiledevice"
+brew "ffmpeg"
+brew "mobile-dev-inc/tap/maestro"
+cask "xcodes-app"
+cask "android-commandlinetools"
+cask "android-platform-tools"
+
+# --- Cloud / infra / services ------------------------------------------------
+brew "azure-cli"
+cask "azure/azd/azd"
+cask "gcloud-cli"
+brew "railway"
+brew "stripe/stripe-cli/stripe"
+brew "libpq"               # psql client (keg-only)
 # brew "awscli"
 # brew "terraform"
 # brew "kubectl"
 
-# --- Casks (GUI apps) — keep minimal; add by hand as you adopt them ---------
-# cask "iterm2"
-# cask "visual-studio-code"
+# --- Casks (GUI apps) --------------------------------------------------------
+cask "iterm2"
+cask "visual-studio-code"
+cask "docker-desktop"
 # cask "google-chrome"
 # cask "rectangle"
 # cask "raycast"
 # cask "1password"
-# cask "docker"
