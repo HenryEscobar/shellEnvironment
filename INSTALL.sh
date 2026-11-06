@@ -32,10 +32,15 @@
 # Safety:
 #   - Real file copies (not symlinks), so deleting the repo doesn't break ~.
 #   - Idempotent: identical files are skipped silently.
-#   - If a home file DIFFERS from the repo copy, you're prompted per file
-#     (show diff / [o]verwrite home / [k]eep home / [m]erge / [q]uit). Nothing is
-#     overwritten without your say-so. Non-interactive runs (no tty) fall back to
-#     backup (<name>-YYYYMMDD-HHMMSS) + overwrite so they never hang.
+#   - If a home file DIFFERS from the repo copy, the file's git history decides
+#     where that is safe (lib/automerge.sh): home holding an older committed
+#     version is updated, home that only adds lines is left for sync.sh, and
+#     edits on different lines are merged into home after the old file is saved
+#     under ~/.local/state/shellenv/backups/<run>/. Only a real conflict (same
+#     lines changed on both sides) prompts: [o]verwrite home / [k]eep home /
+#     [m]erge / [s]how diff / [q]uit. A summary prints at the end. Non-
+#     interactive runs (no tty) resolve a conflict by backup
+#     (<name>-YYYYMMDD-HHMMSS) + overwrite so they never hang.
 #   - Use sync.sh to push changes the other way (home -> repo).
 #   - Every run (dry runs too) is logged to logs/install-YYYYMMDD-HHMM.log in
 #     this repo, gitignored, colour stripped. Prompts and the merge editor talk
@@ -115,17 +120,69 @@ show_diff() {
     fi
 }
 
-# prompt_diff <src=repo> <dest=home> — only called when the two differ.
+# shellcheck source=lib/automerge.sh
+. "$REPO_DIR/lib/automerge.sh"
+AM_TAG=install
+INS_UPDATED=(); INS_MERGED=(); INS_AHEAD=(); INS_ASKED=()
+# Home is not in git, so before an automatic merge writes a home file the old
+# one is kept here, outside ~/.claude, where a stray copy cannot be picked up
+# as a skill, memory, or hook.
+BACKUP_DIR="$HOME/.local/state/shellenv/backups/$BACKUP_TAG"
+
+backup_home() {   # backup_home <home-file>
+    local dest="$1" rel="${1#"$HOME/"}"
+    mkdir -p "$(dirname "$BACKUP_DIR/$rel")"
+    cp -p "$dest" "$BACKUP_DIR/$rel"
+}
+
+# print_summary: one block at the end instead of a diff per file.
+print_summary() {
+    [ "$DRY_RUN" -eq 1 ] && return 0
+    am_list "updated from repo (home had an older version)" ${INS_UPDATED[@]+"${INS_UPDATED[@]}"}
+    am_list "merged repo changes into home, home edits kept" ${INS_MERGED[@]+"${INS_MERGED[@]}"}
+    [ "${#INS_MERGED[@]}" -gt 0 ] && log "  previous versions saved under $BACKUP_DIR"
+    am_list "home is newer than repo, left alone (./sync.sh captures it)" ${INS_AHEAD[@]+"${INS_AHEAD[@]}"}
+    am_list "real conflicts you were asked about" ${INS_ASKED[@]+"${INS_ASKED[@]}"}
+    return 0
+}
+
+# prompt_diff <src=repo> <dest=home>: only called when the two differ.
+#
+# Decides by itself where it safely can (classification: lib/automerge.sh):
+#   home_older  home equals an older committed version -> copy repo over it
+#   home_adds   home only adds lines                   -> leave home (sync.sh's job)
+#   merged      both changed, different places         -> back up, write merge
+#   conflict    both changed the same lines            -> o/k/m/s/q prompt
 prompt_diff() {
     local src="$1" dest="$2"
 
+    local short="~${dest#"$HOME"}"
+    am_classify "$dest" "$src"
     if [ "$DRY_RUN" -eq 1 ]; then
-        echo "  diverges: $dest"
+        echo "  $AM_VERDICT: $short (home +$AM_ADDS -$AM_DELS vs repo)"
         return 0
     fi
 
+    case "$AM_VERDICT" in
+        home_older)
+            cp -p "$src" "$dest"; INS_UPDATED+=("$short"); return 0 ;;
+        home_adds)
+            INS_AHEAD+=("$short"); return 0 ;;
+        merged)
+            if cmp -s "$AM_MERGED" "$dest"; then
+                INS_AHEAD+=("$short")          # home already has the repo's changes
+            elif cmp -s "$AM_MERGED" "$src"; then
+                cp -p "$src" "$dest"; INS_UPDATED+=("$short")
+            else
+                backup_home "$dest"
+                cat "$AM_MERGED" >"$dest"
+                INS_MERGED+=("$short")
+            fi
+            return 0 ;;
+    esac
+
     # Non-interactive (no tty): fall back to the old safe behavior so unattended
-    # runs never hang on a prompt — back up, then overwrite.
+    # runs never hang on a prompt: back up, then overwrite.
     if [ ! -e /dev/tty ]; then
         log "backup $dest -> $dest-$BACKUP_TAG (non-interactive)"
         cp -p "$dest" "$dest-$BACKUP_TAG"
@@ -134,22 +191,20 @@ prompt_diff() {
         return 0
     fi
 
+    INS_ASKED+=("$short")
     while true; do
         echo
-        log "$dest differs from repo."
-        show_diff "$dest" "$src" | sed -n '1,80p'
-        local n; n=$(show_diff "$dest" "$src" | wc -l | tr -d ' ')
-        [ "$n" -gt 80 ] && echo "(diff truncated — $n lines; [s]how full or [m]erge)"
-        printf '\n  [o]verwrite home  [k]eep home  [m]erge in %s  [s]how full diff  [q]uit  > ' "$MERGE_TOOL"
+        log "$short: both sides changed the same lines (home +$AM_ADDS -$AM_DELS vs repo)"
+        printf '  [o]verwrite home  [k]eep home  [m]erge in %s  [s]how diff  [q]uit  > ' "$MERGE_TOOL"
         read -r choice </dev/tty
         case "$choice" in
             o|O) cp -p "$src" "$dest"; log "updated $dest from repo"; return 0 ;;
             k|K) log "kept home $dest unchanged"; return 0 ;;
             m|M) "$MERGE_TOOL" "$dest" "$src" </dev/tty >/dev/tty 2>&1 || true
                  if cmp -s "$src" "$dest"; then log "merged $dest (now identical)"; return 0
-                 else log "still differs after merge — re-prompting"; fi ;;
+                 else log "still differs after merge; re-prompting"; fi ;;
             s|S) show_diff "$dest" "$src" | ${PAGER:-less -R} >/dev/tty ;;
-            q|Q) warn "quit — remaining files left as-is"; exit 0 ;;
+            q|Q) warn "quit: remaining files left as-is"; exit 0 ;;
             *)   echo "  pick o / k / m / s / q" ;;
         esac
     done
@@ -317,6 +372,7 @@ if [ "$DO_MCP" -eq 1 ]; then
     fi
 fi
 
+print_summary
 log "Done. Log: $LOG_FILE"
 if [ "$DRY_RUN" -eq 1 ]; then
     warn "Dry run — no changes made. Re-run without --dry-run to apply."
