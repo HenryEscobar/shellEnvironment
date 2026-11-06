@@ -49,17 +49,24 @@ because it shells out to the `claude` CLI and needs keys from `~/.zshrc-local`.
 | `./INSTALL.sh` | repo → `$HOME` | Fresh machine, or a `git pull` brought new versions to apply locally   |
 | `./sync.sh`    | `$HOME` → repo | You edited a dotfile / claude config in `$HOME` and want to capture it |
 
-Both are idempotent (identical files skipped), support `--dry-run`, and never destroy data. They
-prompt per differing file (mirrored, opposite directions): `INSTALL.sh` shows a diff and asks
+Both are idempotent (identical files skipped), support `--dry-run`, and never destroy data.
+`INSTALL.sh` prompts per differing file with a diff:
 `[o]verwrite home / [k]eep home / [m]erge in $EDITOR / [s]how / [q]uit` (non-interactive runs with
-no tty fall back to timestamped backup + overwrite); `sync.sh` does the same toward the repo
-(`[o]verwrite repo / [k]eep / [m]erge / [s]how / [q]uit`). Nothing is overwritten without an
-explicit `o` or a save during `m`.
+no tty fall back to timestamped backup + overwrite).
+
+**`sync.sh` decides by itself where that is safe** (since 2026-11-06), using the repo file's own
+git history as the merge base: home equal to an older committed version is left alone (repo is
+newer), home that only adds lines is taken, and edits on different lines are 3-way merged with
+`git merge-file`. Only a real conflict prompts (`[o]verwrite repo / [k]eep / [m]erge / [s]how /
+[q]uit`), with a one-line summary rather than a diff; a summary of every decision prints at the
+end. On a tie between candidate bases the OLDER one wins, so same-line edits surface as a
+conflict instead of a "clean" merge that drops the repo's edit. `sync.sh` never writes `$HOME`;
+the repo is in git, so `git diff` reviews and `git restore` undoes any automatic decision.
 
 **This repo is public, so a private sibling repo carries what it can't.** Per-project memories
 (`~/.claude/projects/*/memory/`) and gitignored skill data go to a separate private checkout,
 `$SHELLENV_PRIVATE_DIR` (default `../shellEnvironment-private`). `sync.sh` fills it (home-driven:
-new files are copied without a prompt, differing ones prompt as usual) and `INSTALL.sh` copies it
+new files are copied without a prompt, differing ones get the same automatic handling) and `INSTALL.sh` copies it
 out. Project folders are stored as `HOME-irad-<project>` and expanded to the local `$HOME`, so a
 different username works. Both skip with a warning if the checkout is missing; `--no-private` opts out. Commit and push
 that repo separately. Never move those files into this repo. Details: `docs/architecture.md` §5.
@@ -77,6 +84,7 @@ that repo separately. Never move those files into this repo. Details: `docs/arch
 ./sync.sh                     # interactive capture of home edits back into repo
 ./sync.sh --dry-run           # list only the files that diverge
 ./sync.sh --mcp               # check MCP-server drift only (no file diffs)
+./sync.sh --brew              # only offer brew installs missing from host-os/Brewfile
 
 ./claude/mcp-servers.sh       # (re)create user-scope MCP servers via `claude mcp add`
 ```
@@ -86,6 +94,11 @@ that repo separately. Never move those files into this repo. Details: `docs/arch
 - **Dotfiles** (repo root): `.shell_common` holds everything portable (aliases, `title()`,
   Homebrew `shellenv`, PATH). `.bashrc` / `.zshrc` add shell-specific bits and each sources
   `.shell_common`. `.tmux.conf` picks `pbcopy`/`pbpaste` on Darwin, `xclip` on Linux.
+- **`host-os/Brewfile` is kept current by `sync.sh`.** A Homebrew pass compares
+  `brew leaves --installed-on-request` and installed casks against every name in the Brewfile,
+  commented or not, and offers the missing ones (`[a]dd all / [p]ick / [k]eep all out / [s]kip`).
+  "Keep out" writes a commented line, which is how "installed here, not for every machine" is
+  recorded, so it is never offered again. `--no-brew` skips it.
 - **`host-os/`**: one-shot macOS bootstrap — Xcode CLT → Homebrew → `Brewfile` → `npm-globals.sh`.
   Darwin-only (aborts otherwise). Idempotent; npm step is allowed to fail without aborting.
 - **`claude/`**: the tracked subset of `~/.claude/` (CLAUDE.md, investigations.md, settings.json,

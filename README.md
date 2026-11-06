@@ -83,17 +83,20 @@ doesn't break your shell or `~/.claude/`.
 
 Both scripts:
 
-- **Never overwrite without a safety net.** Both show the diff and prompt per
-  file when a file differs (INSTALL.sh toward home, sync.sh toward the repo).
-  INSTALL.sh falls back to a timestamped backup + overwrite only when run with no
+- **Never overwrite without a safety net.** INSTALL.sh shows the diff and
+  prompts per differing file. sync.sh only writes the repo, which is in git, and
+  only prompts on a real conflict (see below). INSTALL.sh falls back to a timestamped backup + overwrite only when run with no
   tty (unattended).
 - **Are idempotent.** Identical files are skipped silently.
 - Support `--dry-run` to preview without changing anything.
 
 ### `sync.sh` per-file options
 
-When a home file differs from the repo version, sync.sh shows the diff and
-prompts:
+sync.sh handles most differences itself, using the file's git history as the
+merge base: home older than the repo is left alone, home that only adds lines is
+taken, and edits on different lines are merged. A summary prints at the end;
+`git diff` reviews it and `git restore` undoes it. Only when both sides changed
+the same lines does it prompt:
 
 - **o** — overwrite repo with the home version
 - **k** — keep repo as-is (your local edit stays at home only)
@@ -102,7 +105,8 @@ prompts:
 - **s** — show the full diff again, paged
 - **q** — quit, leave remaining files untouched
 
-Nothing in the repo is overwritten unless you press **o** or save during **m**.
+It also offers anything you `brew install`ed that `host-os/Brewfile` does not
+name yet; declining records it as a commented line so it is not asked again.
 
 ## MCP servers
 

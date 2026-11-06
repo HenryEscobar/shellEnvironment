@@ -207,12 +207,12 @@ Nothing is overwritten without an explicit `o`, or a save during `m` that makes 
 
 ## 5. `sync.sh`: `$HOME` → repo
 
-Same prompt shape as `INSTALL.sh`, mirrored: `[o]verwrite **repo**`. Three passes plus a separate
-MCP mode.
+Unlike `INSTALL.sh`, `sync.sh` resolves most differences without asking (see `handle_one` below)
+and only prompts on a real conflict. Three file passes, a Homebrew pass, and a separate MCP mode.
 
 ```mermaid
 flowchart TD
-    S["./sync.sh<br/>--dry-run / --no-claude / --no-adopt / --mcp"] --> M{"--mcp?"}
+    S["./sync.sh<br/>--dry-run / --no-claude / --no-adopt / --no-brew / --mcp"] --> M{"--mcp?"}
     M -->|yes| MCPONLY["MCP drift check only"]
     M -->|no| P1
 
@@ -223,7 +223,8 @@ flowchart TD
         P1 --> P2 --> P3
     end
 
-    P3 --> DONE2["Done · review with git diff"]
+    P3 --> BREWP["Homebrew pass (added 2026-11-06):<br/>installed but not named in host-os/Brewfile<br/>→ add / keep out (commented) / skip"]
+    BREWP --> DONE2["Done · summary · review with git diff"]
     MCPONLY --> DONE2
 
     style P3 fill:#1e3a5f,stroke:#34d399,color:#e5e7eb
@@ -236,8 +237,18 @@ flowchart TD
 | missing at home      | warn, skip (the repo has something `$HOME` does not)                      |
 | symlink at home      | warn, skip (convert it first)                                             |
 | identical (`cmp -s`) | skip silently                                                             |
-| `--dry-run`          | print `diverges: <rel>`                                                   |
-| differs              | show diff, prompt `[o]verwrite repo / [k]eep / [m]erge / [s]how / [q]uit` |
+| `--dry-run`          | print the verdict it would act on: `<verdict>: <rel> (home +a -d vs repo)` |
+| home = older commit  | `stale`: leave repo alone (it is newer; `./INSTALL.sh` brings it home)    |
+| home only adds lines | `additions`: take home                                                     |
+| edits on other lines | `merged`: `git merge-file` 3-way into the repo                             |
+| same lines changed   | `conflict`: one-line summary, prompt `[o] / [k] / [m]erge / [s]how diff / [q]` |
+
+The merge base comes from `find_base`: the committed version (last 30 commits touching the file,
+in whichever repo holds it, so the private checkout works too) closest to the home file. Ties go
+to the **older** version. Picking the newer one on a tie would make a same-line edit on both
+machines look like a clean merge that silently drops the repo side; the older base turns it into a
+conflict. Every automatic outcome keeps both sides' changes, and `print_summary` lists them at
+the end.
 
 ### The structural blind spot
 
