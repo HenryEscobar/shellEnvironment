@@ -194,14 +194,20 @@ flowchart TD
     D -->|yes| E{"cmp -s identical?"}
     E -->|yes| E1["skip silently (idempotent)"]
     E -->|no| F["prompt_diff"]
-    F --> G{"tty available?"}
+    F --> V{"am_classify<br/>(lib/automerge.sh)"}
+    V -->|home_older| V1["cp repo over home"]
+    V -->|home_adds| V2["leave home (sync.sh captures it)"]
+    V -->|merged| V3["back up to ~/.local/state/shellenv/backups/,<br/>write the 3-way merge"]
+    V -->|conflict| G{"tty available?"}
     G -->|no| G1["backup dest-YYYYMMDD-HHMMSS,<br/>then overwrite (never hangs)"]
-    G -->|yes| G2["show diff, then:<br/>[o]verwrite home · [k]eep home<br/>[m]erge in $EDITOR · [s]how full · [q]uit"]
+    G -->|yes| G2["one-line summary, then:<br/>[o]verwrite home · [k]eep home<br/>[m]erge in $EDITOR · [s]how diff · [q]uit"]
 
     style F fill:#3f2d1f,stroke:#fbbf24,color:#e5e7eb
 ```
 
-Nothing is overwritten without an explicit `o`, or a save during `m` that makes the files match.
+Automatic outcomes keep both sides' changes; a merge into home saves the previous file first.
+`print_summary` lists every decision at the end. The classification is the same one `sync.sh`
+uses (see §5), so a change to it goes in `lib/automerge.sh` and applies to both directions.
 
 ---
 

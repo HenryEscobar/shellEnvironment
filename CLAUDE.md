@@ -30,7 +30,7 @@ silently reverts you.
 
 **Ask for explicit permission before editing any tracked file here.** Two exceptions, both
 repo-only files with no `$HOME` twin, safe to edit in place: `.gitignore`, `README.md`,
-`CLAUDE.md`, `LICENSE`, and the scripts themselves (`INSTALL.sh`, `sync.sh`, `host-os/`).
+`CLAUDE.md`, `LICENSE`, and the scripts themselves (`INSTALL.sh`, `sync.sh`, `lib/`, `host-os/`).
 
 ## Core model: two-way copy between repo and `$HOME`
 
@@ -50,11 +50,16 @@ because it shells out to the `claude` CLI and needs keys from `~/.zshrc-local`.
 | `./sync.sh`    | `$HOME` → repo | You edited a dotfile / claude config in `$HOME` and want to capture it |
 
 Both are idempotent (identical files skipped), support `--dry-run`, and never destroy data.
-`INSTALL.sh` prompts per differing file with a diff:
-`[o]verwrite home / [k]eep home / [m]erge in $EDITOR / [s]how / [q]uit` (non-interactive runs with
-no tty fall back to timestamped backup + overwrite).
+**Both decide by itself where that is safe** (`sync.sh` since 2026-11-06, `INSTALL.sh` since
+2026-11-06), through the shared `lib/automerge.sh`. Change the classification there, not in either
+script. `INSTALL.sh` mirrors `sync.sh`: home holding an older committed version is updated, home
+that only adds lines is left alone (it is `sync.sh`'s to capture), and edits on different lines are
+merged into home after the old file is saved under `~/.local/state/shellenv/backups/<run>/`
+(outside `~/.claude`, so a stray copy is never read as a skill or memory). Only a real conflict
+prompts `[o]verwrite home / [k]eep home / [m]erge / [s]how / [q]uit`; with no tty a conflict falls
+back to timestamped backup + overwrite.
 
-**`sync.sh` decides by itself where that is safe** (since 2026-11-06), using the repo file's own
+**`sync.sh`** uses the repo file's own
 git history as the merge base: home equal to an older committed version is left alone (repo is
 newer), home that only adds lines is taken, and edits on different lines are 3-way merged with
 `git merge-file`. Only a real conflict prompts (`[o]verwrite repo / [k]eep / [m]erge / [s]how /

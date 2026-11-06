@@ -110,70 +110,30 @@ show_diff() {
     fi
 }
 
-TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+# shellcheck source=lib/automerge.sh
+. "$REPO_DIR/lib/automerge.sh"
+AM_TAG=sync
 SUM_TAKEN=(); SUM_MERGED=(); SUM_STALE=(); SUM_ASKED=()
-
-# find_base <repo-file> <home-file> <out>
-#
-# Picks a merge base from the repo file's own git history (last 30 commits that
-# touched it): the committed version closest to the home file. If the home file
-# IS one of those versions, sets BASE_IS_HOME=1, meaning home simply has not had
-# the newer repo version installed yet. Works for both this repo and the
-# private checkout, since it asks whichever repo the file lives in.
-find_base() {
-    local repo="$1" home="$2" out="$3"
-    local dir path sha n best_n=999999 cand="$TMP_DIR/cand"
-    BASE_IS_HOME=0
-    : >"$out"
-    dir="$(dirname "$repo")"
-    path="$(git -C "$dir" ls-files --full-name -- "$(basename "$repo")" 2>/dev/null)"
-    [ -n "$path" ] || return 1
-    while read -r sha; do
-        git -C "$dir" show "$sha:$path" >"$cand" 2>/dev/null || continue
-        if cmp -s "$cand" "$home"; then
-            cp "$cand" "$out"; BASE_IS_HOME=1; return 0
-        fi
-        n=$(diff "$cand" "$home" | grep -c '^[<>]' || true)
-        # -le, not -lt: log runs newest first, so ties go to the OLDER version.
-        # If both sides edited the same line, home is equally far from the old
-        # and new versions; picking the new one as base would make the repo's
-        # edit vanish in a "clean" merge. The older base surfaces a conflict.
-        if [ "$n" -le "$best_n" ]; then best_n=$n; cp "$cand" "$out"; fi
-    done < <(git -C "$dir" log -n 30 --format=%H -- ":(top)$path")
-    [ -s "$out" ]
-}
 
 # print_summary: one block at the end instead of a diff per file.
 print_summary() {
-    local f
     [ "$DRY_RUN" -eq 1 ] && return 0
-    if [ "${#SUM_TAKEN[@]}" -gt 0 ]; then
-        log "took home version (home only added lines): ${#SUM_TAKEN[@]}"
-        for f in "${SUM_TAKEN[@]}"; do echo "      $f"; done
-    fi
-    if [ "${#SUM_MERGED[@]}" -gt 0 ]; then
-        log "merged both sides automatically (no overlapping edits): ${#SUM_MERGED[@]}"
-        for f in "${SUM_MERGED[@]}"; do echo "      $f"; done
-        warn "  home lacks the repo side of those; ./INSTALL.sh brings the merged result home"
-    fi
-    if [ "${#SUM_STALE[@]}" -gt 0 ]; then
-        log "repo already newer than home, left alone: ${#SUM_STALE[@]}"
-        for f in "${SUM_STALE[@]}"; do echo "      $f"; done
-    fi
-    if [ "${#SUM_ASKED[@]}" -gt 0 ]; then
-        log "real conflicts you were asked about: ${#SUM_ASKED[@]}"
-    fi
+    am_list "took home version (home only added lines)" ${SUM_TAKEN[@]+"${SUM_TAKEN[@]}"}
+    am_list "merged both sides automatically (no overlapping edits)" ${SUM_MERGED[@]+"${SUM_MERGED[@]}"}
+    [ "${#SUM_MERGED[@]}" -gt 0 ] && warn "  home lacks the repo side of those; ./INSTALL.sh brings the merged result home"
+    am_list "repo already newer than home, left alone" ${SUM_STALE[@]+"${SUM_STALE[@]}"}
+    am_list "real conflicts you were asked about" ${SUM_ASKED[@]+"${SUM_ASKED[@]}"}
     return 0
 }
 
 # handle_one <home> <repo>
 #
 # Decides by itself where it safely can, and only asks on a real conflict:
-#   stale     home equals an older committed version -> leave repo alone
-#   additions home only adds lines                   -> take home
-#   merged    both changed, different places         -> 3-way merge into repo
-#   conflict  both changed the same lines            -> o/k/m/s/q prompt
+#   home_older  home equals an older committed version -> leave repo alone
+#   home_adds   home only adds lines                   -> take home
+#   merged      both changed, different places         -> 3-way merge into repo
+#   conflict    both changed the same lines            -> o/k/m/s/q prompt
+# The classification lives in lib/automerge.sh, shared with INSTALL.sh.
 # Every automatic outcome keeps both sides' changes, and the repo is in git, so
 # `git diff` / `git restore` review or undo any of it.
 handle_one() {
@@ -193,36 +153,24 @@ handle_one() {
         return 0  # identical
     fi
 
-    local adds dels verdict
-    adds=$(diff "$repo" "$home" | grep -c '^>' || true)
-    dels=$(diff "$repo" "$home" | grep -c '^<' || true)
-    : >"$TMP_DIR/merged"
-    if find_base "$repo" "$home" "$TMP_DIR/base" && [ "$BASE_IS_HOME" -eq 1 ]; then
-        verdict=stale        # home is an older committed version; repo is newer
-    elif [ "$dels" -eq 0 ]; then
-        verdict=additions    # home only adds lines; taking it loses nothing
-    elif [ -s "$TMP_DIR/base" ] && cp "$home" "$TMP_DIR/merged" \
-         && git merge-file -q "$TMP_DIR/merged" "$TMP_DIR/base" "$repo" 2>/dev/null; then
-        verdict=merged       # both changed, in different places
-    else
-        verdict=conflict
-    fi
+    am_classify "$home" "$repo"
+    local adds="$AM_ADDS" dels="$AM_DELS"
 
     if [ "$DRY_RUN" -eq 1 ]; then
-        echo "  $verdict: $rel (home +$adds -$dels vs repo)"
+        echo "  $AM_VERDICT: $rel (home +$adds -$dels vs repo)"
         return 0
     fi
 
-    case "$verdict" in
-        stale)
+    case "$AM_VERDICT" in
+        home_older)                     # repo is newer; INSTALL.sh's job
             SUM_STALE+=("$rel"); return 0 ;;
-        additions)
+        home_adds)                      # taking home loses nothing
             cp -p "$home" "$repo"; SUM_TAKEN+=("$rel"); return 0 ;;
         merged)
-            if cmp -s "$TMP_DIR/merged" "$repo"; then
+            if cmp -s "$AM_MERGED" "$repo"; then
                 SUM_STALE+=("$rel")     # repo already holds home's changes
             else
-                cat "$TMP_DIR/merged" >"$repo"
+                cat "$AM_MERGED" >"$repo"
                 SUM_MERGED+=("$rel")
             fi
             return 0 ;;

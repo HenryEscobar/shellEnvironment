@@ -83,10 +83,11 @@ doesn't break your shell or `~/.claude/`.
 
 Both scripts:
 
-- **Never overwrite without a safety net.** INSTALL.sh shows the diff and
-  prompts per differing file. sync.sh only writes the repo, which is in git, and
-  only prompts on a real conflict (see below). INSTALL.sh falls back to a timestamped backup + overwrite only when run with no
-  tty (unattended).
+- **Never overwrite without a safety net.** Both work out from git history
+  which side is newer and only prompt on a real conflict. sync.sh only writes
+  the repo, which is in git. INSTALL.sh saves a home file under
+  `~/.local/state/shellenv/backups/` before merging into it, and falls back to a
+  timestamped backup + overwrite on a conflict only when run with no tty.
 - **Are idempotent.** Identical files are skipped silently.
 - Support `--dry-run` to preview without changing anything.
 
