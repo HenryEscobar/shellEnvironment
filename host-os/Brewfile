@@ -68,3 +68,6 @@ cask "docker-desktop"
 # cask "rectangle"
 # cask "raycast"
 # cask "1password"
+
+# --- Added by sync.sh (move into a section above when convenient) -----------
+brew "bundletool"
